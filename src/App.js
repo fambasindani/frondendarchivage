@@ -9,6 +9,11 @@ import DocumentScreen from './Screens/DocumentScreen';
 import MinistereScreen from './Screens/MinistereScreen';
 import NoteperceptionScreen from './Screens/NoteperceptionScreen';
 import NotePlusScreen from './Screens/NotePlusScreen';
+import ScannerComponent from './Composant/ScannerComponent';
+import ListeDocumentScreen from './Screens/ListeDocumentScreen';
+import UtilisateurScreen from './Screens/UtilisateurScreen';
+import Tableaudebordnote from './Screens/Tableaudebordnote';
+import ListenoteScreen from './Screens/ListenoteScreen';
 
 
 
@@ -39,10 +44,19 @@ function App() {
           <Route path="/note-perception" component={NoteperceptionScreen} />
           <Route path="/note-plus" component={NotePlusScreen} />
 
+          <Route path="/scan" component={ScannerComponent} />
+          <Route path="/listedocument/:id" component={ListeDocumentScreen} />
+          <Route path="/utilisateur" component={UtilisateurScreen} />
+          <Route path="/tableaudebordnote" component={Tableaudebordnote} />
+          <Route path="/listenote/:id" component={ListenoteScreen} />
+
+
+          
 
 
 
-         
+
+
 
 
 

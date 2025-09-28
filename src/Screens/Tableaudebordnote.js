@@ -7,41 +7,35 @@ import { API_BASE_URL } from "../config";
 import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 
-const DashboardScreen = () => {
-  const [searchTerm, setSearchTerm] = useState("");
+const Tableaudebordnote = () => {
   const [loading, setLoading] = useState(false);
-  const [classificateurs, setClassificateurs] = useState([]);
-  const [directions, setDirections] = useState([]);
-  const [selectedDirection, setSelectedDirection] = useState("");
-  const [totalResults, setTotalResults] = useState(0);
+  const [centres, setCentres] = useState([]);
+  const [filteredCentres, setFilteredCentres] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [articles, setArticles] = useState([]);
+  const [selectedArticle, setSelectedArticle] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const history = useHistory();
   const itemsPerPage = 4;
 
+   const history = useHistory();
 
-
-  const utilisateur = JSON.parse(localStorage.getItem("utilisateur"));
-  const nom = utilisateur?.nom || "";
-  const prenom = utilisateur?.prenom || "";
-  const role = utilisateur?.role || "";
   const token = GetTokenOrRedirect();
-  const id_direction = utilisateur?.id_direction || "";
 
   useEffect(() => {
     if (token) {
       fetchDashboardData();
-      fetchDirections();
-     // alert(id_direction)
+      fetchArticles();
     }
   }, [token]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE_URL}/declaration-dashboard`, {
+      const res = await axios.get(`${API_BASE_URL}/note-perception-dashboard`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setClassificateurs(res.data);
+      setCentres(res.data);
+      setFilteredCentres(res.data);
     } catch (error) {
       console.error(error);
       Swal.fire("Erreur", "Impossible de charger les données du tableau de bord", "error");
@@ -50,99 +44,70 @@ const DashboardScreen = () => {
     }
   };
 
-  const fetchDirections = async () => {
+  const fetchArticles = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/direction`, {
+      const res = await axios.get(`${API_BASE_URL}/articleall`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setDirections(response.data);
+      setArticles(res.data);
     } catch (error) {
       console.error(error);
-      Swal.fire("Erreur", "Impossible de charger les directions", "error");
+      Swal.fire("Erreur", "Impossible de charger les articles budgétaires", "error");
     }
   };
 
- const handleSearch = async () => {
-  // Vérifier si les champs sont vides
-  if (!searchTerm && !selectedDirection) {
-    Swal.fire("Info", "Veuillez remplir au moins un champ pour la recherche.", "info");
-    return;
-  }
+  const handleSearch = () => {
+    if (!searchTerm.trim() && !selectedArticle) {
+      Swal.fire("Info", "Veuillez remplir au moins un champ pour la recherche.", "info");
+      return;
+    }
 
-  setLoading(true);
-  try {
-    const res = await axios.post(`${API_BASE_URL}/declaration-search`, {
-      nom_classeur: searchTerm,
-      id_direction: selectedDirection,
-    }, {
-      headers: { Authorization: `Bearer ${token}` },
+    const results = centres.filter((centre) => {
+      const matchNom = centre.centre_ordonnancement.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchArticle = selectedArticle ? centre.nom === selectedArticle : true;
+      return matchNom && matchArticle;
     });
 
-    // Regroupement par nom_classeur et id_classeur
-    const groupedResults = res.data.declarations.reduce((acc, declaration) => {
-      const { nom_classeur, id_classeur } = declaration;
-      const key = `${nom_classeur}-${id_classeur}`; // Clé unique pour le regroupement
-               
-      if (!acc[key]) {
-        acc[key] = { total: 0, nom_classeur, id_classeur }; // Initialisation
-      }
-      acc[key].total += 1; // Incrément du total
-      return acc;
-    }, {});
-
-    // Convertir l'objet en tableau
-    const resultsArray = Object.values(groupedResults);
-    setClassificateurs(resultsArray); // Mettez à jour avec les résultats groupés
-    setTotalResults(resultsArray.length); // Total des classes
-  } catch (error) {
-    console.error(error);
-    Swal.fire("Erreur", "Impossible de charger les résultats de recherche", "error");
-  } finally {
-    setLoading(false);
-  }
-};
+    setFilteredCentres(results);
+    setCurrentPage(1);
+  };
 
   const handleReset = () => {
     setSearchTerm("");
-    setSelectedDirection("");
-    setClassificateurs([]); // Réinitialiser les résultats
-    setTotalResults(0); // Réinitialiser le total
-    fetchDashboardData(); // Recharger les données par défaut
+    setSelectedArticle("");
+    setFilteredCentres(centres);
+    setCurrentPage(1);
   };
 
-const hundlelistedocument = (item) => {
-  
-
- if (selectedDirection=="") {
-    history.push({
-        pathname: `/listedocument/${item.id_classeur}`, // chemin de la route
-        state: { item, selectedDirection } // passage de l'objet item dans l'état
-    });
-  }
-  else{
-       history.push({
-        pathname: `/listedocument/${item.id_classeur}`, // chemin de la route
-        state: { item, selectedDirection } // passage de l'objet item dans l'état
-    });
-
-    
-  } 
-
-};
-
-
-
-  
-
-  const totalPages = Math.ceil(classificateurs.length / itemsPerPage);
-  const paginatedClassificateurs = classificateurs.slice(
+  const totalPages = Math.ceil(filteredCentres.length / itemsPerPage);
+  const paginatedCentres = filteredCentres.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
 
 
+  const hundlendlistenote=(item)=>{
+   //  history.push("/listenote");
+   // alert("hhhhhhhhhhhhhhhhh") noteid-searchnote
+
+   
+
+    if (selectedArticle=="") {
+    history.push({
+        pathname: `/listenote/${item.id_centre}`, // chemin de la route
+        state: { item, selectedArticle } // passage de l'objet item dans l'état
+    });
+  }
+  else{
+       history.push({
+        pathname: `/listenote/${item.id_centre}`, // chemin de la route
+        state: { item, selectedArticle } // passage de l'objet item dans l'état
+    });
+
     
+  } 
+  }
 
   return (
     <div style={{ backgroundColor: "whiteSmoke", minHeight: "100vh" }}>
@@ -152,35 +117,33 @@ const hundlelistedocument = (item) => {
         <div className="content-header">
           <div className="container-fluid">
             <h5 className="p-2 mb-3 bg-dark text-white">
-              <i className="ion-ios-speedometer-outline mr-2" /> Tableau de Bord Documents
+              <i className="ion-ios-speedometer-outline mr-2" /> Tableau de Bord pour Note de perception
             </h5>
             <div className="row mb-2">
               <div className="col-sm-4">
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="Rechercher par type de classeur"
+                  placeholder="Rechercher par nom de centre"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <div className="col-sm-3">
+              <div className="col-sm-4">
                 <select
                   className="form-control"
-                  value={selectedDirection}
-                  onChange={(e) => setSelectedDirection(e.target.value)}
+                  value={selectedArticle}
+                  onChange={(e) => setSelectedArticle(e.target.value)}
                 >
-                  <option value="" disabled>
-                    Veuillez sélectionner la direction
-                  </option>
-                  {directions.map((direction) => (
-                    <option key={direction.id} value={direction.id}>
-                      {direction.nom}
+                  <option value="">Sélectionner un article budgétaire</option>
+                  {articles.map((article) => (
+                    <option key={article.id} value={article.nom}>
+                      {article.nom}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="col-sm-2">
+              <div className="col-sm-4">
                 <button className="btn btn-primary" onClick={handleSearch}>
                   Chercher
                 </button>
@@ -202,20 +165,21 @@ const hundlelistedocument = (item) => {
               </div>
             ) : (
               <div className="row">
-                {paginatedClassificateurs.map((classifier) => (
-                  <div key={classifier.nom_classeur} className="col-lg-4 col-6">
+                {paginatedCentres.map((centre, index) => (
+                  <div key={index} className="col-lg-4 col-6">
                     <div className="small-box bg-info">
                       <div className="inner">
-                        <h5>{classifier.total}</h5>
-                        <p>{classifier.nom_classeur}</p>
+                        <h5>{centre.total}</h5>
+                        <p>{centre.centre_ordonnancement}</p>
                       </div>
                       <div className="icon">
                         <i className="fa fa-folder-open mr-2" />
                       </div>
                       <a
-                        //onClick={() => Swal.fire("Info", `Détails pour ${classifier.nom_classeur}`, "info")}
-                        //onClick={hundlelistedocument(classifier)}
-                        onClick={() => hundlelistedocument(classifier)}
+                        
+                            onClick={() => hundlendlistenote(centre)}
+                          
+                        
                         className="small-box-footer"
                         style={{ cursor: "pointer" }}
                       >
@@ -258,4 +222,4 @@ const hundlelistedocument = (item) => {
   );
 };
 
-export default DashboardScreen;
+export default Tableaudebordnote;

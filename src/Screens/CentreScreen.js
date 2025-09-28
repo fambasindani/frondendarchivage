@@ -8,11 +8,15 @@ import Input from "../Composant/Input";
 import Table from "../Composant/Table";
 import { API_BASE_URL } from "../config";
 import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
+import Droplist from "../Composant/DropList ";
+
 
 const CentreScreen = () => {
     const [centres, setCentres] = useState([]);
+    const [ministeres, setMinisteres] = useState([]);
     const [nom, setNom] = useState("");
     const [description, setDescription] = useState("");
+    const [ministereId, setMinistereId] = useState("");
     const [errors, setErrors] = useState({});
     const [search, setSearch] = useState("");
     const [pagination, setPagination] = useState({ current_page: 1, last_page: 1 });
@@ -25,29 +29,39 @@ const CentreScreen = () => {
 
     useEffect(() => {
         if (token) {
-            fetchCentres();
+            fetchDropdowns();
         }
     }, [pagination.current_page, modeRecherche, token]);
 
-    const fetchCentres = async () => {
+    const fetchDropdowns = async () => {
+        if (!token) return;
         setLoading(true);
-        try {
-            let res;
-            if (modeRecherche && search.trim() !== "") {
-                res = await axios.post(`${API_BASE_URL}/centre_ordonnancements/search`, { search, page: pagination.current_page }, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-            } else {
-                res = await axios.get(`${API_BASE_URL}/centre_ordonnancements/all?page=${pagination.current_page}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-            }
 
-            setCentres(res.data.data);
-            setPagination({ current_page: res.data.current_page, last_page: res.data.last_page });
+        try {
+            const [resMinisteres, resCentres] = await Promise.all([
+                axios.get(`${API_BASE_URL}/article`, { headers: { Authorization: `Bearer ${token}` } }),
+                modeRecherche && search.trim() !== ""
+                    ? axios.post(`${API_BASE_URL}/centre_ordonnancements/search`, { search, page: pagination.current_page }, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    })
+                    : axios.get(`${API_BASE_URL}/centre_ordonnancements/all?page=${pagination.current_page}`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }),
+            ]);
+
+            setMinisteres(resMinisteres.data.data || resMinisteres.data);
+            //setCentres(resCentres.data.data || resCentres.data);
+            setCentres(resCentres.data.data.map(centre => ({
+                ...centre,
+                article_budgetaire: centre.article_budgetaire || {}, // Assurez-vous que l'article budgétaire est défini
+            })) || resCentres.data);
+
+            console.log(resCentres);
+
+            setPagination({ current_page: resCentres.data.current_page, last_page: resCentres.data.last_page });
         } catch (err) {
-            console.error(err);
-            Swal.fire("Erreur", "Erreur lors du chargement des centres", "error");
+            console.error("Erreur lors du chargement des dropdowns :", err.response || err.message);
+            Swal.fire("Erreur", "Erreur lors du chargement des listes", "error");
         } finally {
             setLoading(false);
         }
@@ -68,28 +82,49 @@ const CentreScreen = () => {
         e.preventDefault();
         setErrors({});
 
+        // Vérifiez si un ministère est sélectionné
+       /*  if (!ministereId) {
+            Swal.fire("Erreur", "Veuillez sélectionner un ministère.", "error");
+            return; // Ne pas continuer si aucun ministère n'est sélectionné
+        } */
+
         try {
+            const payload = {
+                nom,
+                description,
+                id_ministere: parseInt(ministereId), // Assurez-vous que c'est un nombre
+            };
+
             if (centreEnEdition) {
-                await axios.put(`${API_BASE_URL}/centre_ordonnancements/${centreEnEdition}`, { nom, description }, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                await axios.put(
+                    `${API_BASE_URL}/centre_ordonnancements/${centreEnEdition}`,
+                    payload,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
                 Swal.fire("Succès", "Centre mis à jour avec succès", "success");
             } else {
-                await axios.post(`${API_BASE_URL}/centre_ordonnancements`, { nom, description }, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                await axios.post(
+                    `${API_BASE_URL}/centre_ordonnancements`,
+                    payload,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
                 Swal.fire("Succès", "Centre ajouté avec succès", "success");
             }
 
+            // Réinitialisation des champs
             setNom("");
             setDescription("");
+            setMinistereId(""); // Réinitialiser également le champ
             setCentreEnEdition(null);
             setValeurtable(true);
             setPagination((prev) => ({ ...prev, current_page: 1 }));
-            fetchCentres();
+            fetchDropdowns();
+
         } catch (error) {
             if (error.response?.data?.errors) {
                 setErrors(error.response.data.errors);
+            } else if (error.response?.data?.message) {
+                Swal.fire("Erreur", error.response.data.message, "error");
             } else {
                 Swal.fire("Erreur", "Une erreur est survenue", "error");
             }
@@ -103,8 +138,11 @@ const CentreScreen = () => {
             });
             setNom(res.data.nom);
             setDescription(res.data.description);
+            setMinistereId(String(res.data.id_ministere || "")); // Vérifiez ici
             setCentreEnEdition(id);
             setValeurtable(false);
+
+            console.log("Ministere ID:", res.data.id_ministere); // Vérifiez la valeur ici
         } catch (err) {
             console.error(err);
             Swal.fire("Erreur", "Erreur lors du chargement", "error");
@@ -123,17 +161,17 @@ const CentreScreen = () => {
             cancelButtonText: "Annuler",
         }).then((result) => {
             if (result.isConfirmed) {
-                axios
-                    .delete(`${API_BASE_URL}/centre_ordonnancements/${id}`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                    })
+                axios.delete(`${API_BASE_URL}/centre_ordonnancements/${id}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
                     .then(() => {
                         Swal.fire("Désactivé", "Le centre a été désactivé", "success");
                         setNom("");
                         setDescription("");
+                        setMinistereId("");
                         setCentreEnEdition(null);
                         setValeurtable(true);
-                        fetchCentres();
+                        fetchDropdowns();
                     })
                     .catch((error) => {
                         console.error(error);
@@ -152,6 +190,7 @@ const CentreScreen = () => {
     const handleCancelEdit = () => {
         setNom("");
         setDescription("");
+        setMinistereId("");
         setCentreEnEdition(null);
         setErrors({});
     };
@@ -159,6 +198,7 @@ const CentreScreen = () => {
     const columns = [
         { key: "nom", label: "Nom du Centre" },
         { key: "description", label: "Description" },
+        { key: "article_budgetaire.nom", label: "Ministere" }, // Utilisez cette clé pour accéder au nom de l'article budgétaire
     ];
 
     const actions = [
@@ -228,11 +268,16 @@ const CentreScreen = () => {
                                         <>
                                             <Table
                                                 columns={columns}
-                                                data={centres}
+                                                data={centres.map(centre => ({
+                                                    ...centre,
+                                                    article_budgetaire: centre.article_budgetaire || {}, // Inclure l'article budgétaire
+                                                }))}
                                                 actions={actions}
                                                 startIndex={(pagination.current_page - 1) * 10}
                                                 emptyMessage="Aucun centre trouvé"
                                             />
+
+
 
                                             <nav>
                                                 <ul className="pagination">
@@ -261,7 +306,23 @@ const CentreScreen = () => {
                             ) : (
                                 <div className="col-md-6 offset-md-3">
                                     <form onSubmit={handleSubmit} className="bg-white p-3 shadow rounded">
-                                        <label>
+
+                                        <label className="mt-3">
+                                            Ministère <span style={{ color: "red" }}>*</span>
+                                        </label>
+                                        <Droplist
+                                            name="id_ministere"
+                                            value={ministereId}
+                                            onChange={(e) => setMinistereId(e.target.value)}
+                                            options={ministeres.map((m) => ({
+                                                id: String(m.id),
+                                                nom: m.nom,
+                                            }))}
+                                            placeholder="-- Sélectionnez un ministère --"
+                                            error={errors.id_ministere && errors.id_ministere[0]}
+                                        />
+
+                                        <label className="mt-3">
                                             Nom du centre <span style={{ color: "red" }}>*</span>
                                         </label>
                                         <Input

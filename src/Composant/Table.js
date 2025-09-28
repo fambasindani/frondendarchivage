@@ -1,6 +1,3 @@
-// components/Table.jsx
-import React from "react";
-
 const Table = ({ columns, data, actions, emptyMessage = "Aucune donnée trouvée", startIndex = 0 }) => {
   return (
     <table className="table table-bordered table-hover">
@@ -25,7 +22,11 @@ const Table = ({ columns, data, actions, emptyMessage = "Aucune donnée trouvée
             <tr key={row.id || index}>
               <td>{startIndex + index + 1}</td>
               {columns.map((col, i) => (
-                <td key={i}>{typeof col.render === "function" ? col.render(row) : row[col.key]}</td>
+                <td key={i}>
+                  {typeof col.render === "function"
+                    ? col.render(row)
+                    : col.key.split('.').reduce((o, k) => (o || {})[k], row)} {/* Gestion des clés imbriquées */}
+                </td>
               ))}
               {actions && (
                 <td>

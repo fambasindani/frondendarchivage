@@ -7,7 +7,7 @@ const Head = () => {
   const prenom = utilisateur?.prenom || "";
   const role = utilisateur?.role || "";
   const nomcomplet = `${prenom} ${nom}`;
-    const history = useHistory();
+  const history = useHistory();
 
   const logout = () => {
     localStorage.removeItem("token");

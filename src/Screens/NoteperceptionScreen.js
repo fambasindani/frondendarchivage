@@ -115,7 +115,7 @@ const NoteperceptionScreen = () => {
         try {
             let res;
             if (modeRecherche && search.trim() !== "") {
-                res = await axios.get(
+                res = await axios.post(
                     `${API_BASE_URL}/notes/search?search=${search}&page=${pagination.current_page}`,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
@@ -141,7 +141,7 @@ const NoteperceptionScreen = () => {
 
         try {
             const [resDirections, resAssujettis, resClasseurs, resEmplacements, resCentres] = await Promise.all([
-                axios.get(`${API_BASE_URL}/article`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`${API_BASE_URL}/articleall`, { headers: { Authorization: `Bearer ${token}` } }),
                 axios.get(`${API_BASE_URL}/assujettis`, { headers: { Authorization: `Bearer ${token}` } }),
                 axios.get(`${API_BASE_URL}/classeur`, { headers: { Authorization: `Bearer ${token}` } }),
                 axios.get(`${API_BASE_URL}/emplacements`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -719,6 +719,7 @@ const NoteperceptionScreen = () => {
                 projet={monprojet} // id classeur
                 idclasseur={idclasseur}
                 idcentre={idcentre}
+                verification={true}
             />
 
 

@@ -640,6 +640,7 @@ const DocumentScreen = () => {
                 monid={selectedId} // id personnel
                 projet={monprojet} // id classeur
                 idclasseur={idclasseur}
+                verification={true}
             />
         </div>
     );

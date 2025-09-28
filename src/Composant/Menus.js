@@ -7,6 +7,7 @@ const Menus = () => {
   const sidebarRef = useRef(null);
 
   const role = JSON.parse(localStorage.getItem("utilisateur"))?.role;
+  const entreprise = JSON.parse(localStorage.getItem("utilisateur"))?.entreprise;
 
   const toggleConfigMenu = () => {
     setOpenConfig(!openConfig);
@@ -70,16 +71,16 @@ const Menus = () => {
             data-accordion="false"
           >
             <li className="nav-item">
-              <Link to="/tableaudebord" className="nav-link active" onClick={fermerSidebar}>
+              <Link
+                to={parseInt(entreprise) === 0 ? "/tableaudebord" : "/tableaudebordnote"}
+                className="nav-link active"
+                onClick={fermerSidebar}
+              >
                 <i className="ion ion-speedometer" /> <p>Dashboard</p>
               </Link>
             </li>
-            <li className="nav-item">
-              <Link to="/direction" className="nav-link" onClick={fermerSidebar}>
-                <i className="fa fa-folder-open mr-2" />
-                <p>Direction</p>
-              </Link>
-            </li>
+
+
 
 
 
@@ -128,7 +129,7 @@ const Menus = () => {
               </ul>
             </li>
 
-            {role === "admin" && (
+            {role === "adminyyy" && (
               <li className="nav-item">
                 <Link to="/personnel" className="nav-link" onClick={fermerSidebar}>
                   <i className="fa fa-users mr-2" />
@@ -160,7 +161,16 @@ const Menus = () => {
               </Link>
             </li>
 
-            {role === "admin" && (
+
+
+            <li className="nav-item">
+              <Link to="/utilisateur" className="nav-link" onClick={fermerSidebar}>
+                <i className="fa fa-user mr-2" />
+                <p>Utilisateur</p>
+              </Link>
+            </li>
+
+            {role === "admins" && (
               <li className={`nav-item ${openConfig ? "menu-open" : ""}`}>
                 <a
                   href="#"
@@ -191,6 +201,13 @@ const Menus = () => {
                     <Link to="/note-perception" className="nav-link" onClick={fermerSidebar}>
                       <i className="far fa-circle nav-icon" />
                       <p>Note-Perception</p>
+                    </Link>
+                  </li>
+
+                  <li className="nav-item">
+                    <Link to="/utilisataeur" className="nav-link" onClick={fermerSidebar}>
+                      <i className="far fa-user nav-icon" />
+                      <p>Utilisateur</p>
                     </Link>
                   </li>
 

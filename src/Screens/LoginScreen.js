@@ -1,19 +1,21 @@
 // screens/LoginScreen.jsx
 import { useState } from "react";
 import axios from "axios";
-import { useHistory } from "react-router-dom";
-import { Link } from "react-router-dom";
+import { useHistory, Link } from "react-router-dom";
 import Swal from "sweetalert2";
 import { API_BASE_URL } from "../config";
-import Input from "../Composant/Input"
+import Input from "../Composant/Input";
 import Button from "../Composant/Button";
+import Droplist from "../Composant/DropList ";
+
 
 const LoginScreen = () => {
   const history = useHistory();
 
   const [form, setForm] = useState({
     email: "",
-    password: ""
+    password: "",
+    entreprise: "", // ✅ on ajoute le champ entreprise
   });
 
   const [errors, setErrors] = useState({});
@@ -29,27 +31,59 @@ const LoginScreen = () => {
     setLoading(true);
     setErrors({});
 
+    // ✅ Validation locale
+    const validationErrors = {};
+    if (!form.email) validationErrors.email = ["L'email est obligatoire"];
+    if (!form.password) validationErrors.password = ["Le mot de passe est obligatoire"];
+    if (form.entreprise === "") validationErrors.entreprise = ["Le type d'entreprise est obligatoire"];
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await axios.post(`${API_BASE_URL}/login`, form);
-
       const { token, utilisateur } = res.data;
 
-      // Sauvegarder les infos de l'utilisateur dans le localStorage
+      // Sauvegarde utilisateur
       localStorage.setItem("utilisateur", JSON.stringify({
         id: utilisateur.id,
         nom: utilisateur.nom,
         email: utilisateur.email,
-        compagnie: utilisateur.compagnie,  // { id, nom }
-        modules: utilisateur.modules        // [{ id, nom }]
+        id_direction: utilisateur.id_direction,
+        id_note: utilisateur.id_note,
+        role: utilisateur.role,
+        entreprise: form.entreprise, // ✅ On sauvegarde aussi le type
       }));
 
-      // Sauvegarder le token
-      if (token) {
-        localStorage.setItem("token", token);
+      if (token) localStorage.setItem("token", token);
+
+      //;
+
+      // ✅ Redirection selon entreprise
+      if (parseInt(form.entreprise) === parseInt(utilisateur.entreprise)) {
+        if (parseInt(utilisateur.entreprise) === 0) {
+          history.push("/tableaudebord");
+          Swal.fire("Succès", "Connexion réussie", "success");
+        } else if (parseInt(utilisateur.entreprise) === 1) {
+          history.push("/tableaudebordnote");
+          Swal.fire("Succès", "Connexion réussie", "success")
+        }
+      } else {
+        if (parseInt(utilisateur.entreprise) === 1) {
+         // alert("Vous n'avez pas le droit d'accéder au module direction");
+            Swal.fire("Erreur", "Vous n'avez pas le droit d'accéder au module autres docs", "error");
+          
+        } else {
+             Swal.fire("Erreur", "Vous n'avez pas le droit d'accéder au module NP", "error");
+         // alert("Vous n'avez pas le droit d'accéder au module centre");
+        }
       }
 
-      Swal.fire("Succès", "Connexion réussie", "success");
-      history.push("/direction");
+
+
 
     } catch (error) {
       if (error.response?.status === 401) {
@@ -63,8 +97,6 @@ const LoginScreen = () => {
       setLoading(false);
     }
   };
-
-
 
   return (
     <div className="hold-transition login-page">
@@ -93,7 +125,21 @@ const LoginScreen = () => {
                 error={errors.password && errors.password[0]}
               />
 
-              <div className="row">
+              {/* ✅ Ajout de la droplist */}
+              <Droplist
+                name="entreprise"
+                value={form.entreprise}
+                onChange={(e) => setForm({ ...form, entreprise: e.target.value })}
+                options={[
+                  //  { id: "", nom: "-- Sélectionnez un type --" },
+                  { id: "0", nom: "Autres docs" },
+                  { id: "1", nom: "NP" },
+                ]}
+                placeholder="-- Sélectionnez un type --"
+                error={errors.entreprise && errors.entreprise[0]}
+              />
+
+              <div className="row mt-3">
                 <div className="col-12">
                   <Button
                     type="submit"

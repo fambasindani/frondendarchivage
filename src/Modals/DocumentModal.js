@@ -3,11 +3,11 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import { API_BASE_URL } from "../config";
 
-const DocumentModal = ({ modalId, isOpen, onClose, monid, projet, idclasseur }) => {
+const DocumentModal = ({ modalId, isOpen, onClose, monid, projet, idclasseur, verification }) => {
   const [fichiers, setFichiers] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [uploading, setUploading] = useState(false);
-    const [Scanning, setScanning] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
     const modal = window.$(`#${modalId}`);
@@ -32,7 +32,6 @@ const DocumentModal = ({ modalId, isOpen, onClose, monid, projet, idclasseur }) 
     }
   };
 
-  // ✅ Filtrer uniquement les fichiers PDF
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
     const pdfOnly = selectedFiles.every(file => file.type === "application/pdf");
@@ -97,20 +96,18 @@ const DocumentModal = ({ modalId, isOpen, onClose, monid, projet, idclasseur }) 
     }
   };
 
-
- 
   const handleScanning = async () => {
     setScanning(true);
     try {
       const response = await axios.post("http://localhost:9000/scan", {}, {
         headers: {
-          'Content-Type': 'application/json', // Ou tout autre type de contenu attendu par votre API
+          'Content-Type': 'application/json',
         },
       });
 
       if (response.data.status === "success") {
         Swal.fire("Succès", "Document scanné et importé avec succès", "success");
-        fetchDocuments(); // Actualiser la liste des documents
+        fetchDocuments();
       } else {
         Swal.fire("Erreur", `Échec du scan : ${response.data.message}`, "error");
       }
@@ -121,8 +118,6 @@ const DocumentModal = ({ modalId, isOpen, onClose, monid, projet, idclasseur }) 
       setScanning(false);
     }
   };
-
-
 
   return (
     <div className="modal fade" id={modalId} tabIndex="-1" role="dialog" aria-hidden="true">
@@ -136,40 +131,42 @@ const DocumentModal = ({ modalId, isOpen, onClose, monid, projet, idclasseur }) 
           </div>
 
           <div className="modal-body">
-            <form onSubmit={handleUpload} className="mb-3">
-              <div className="form-group">
-                <label>Importer des fichiers PDF</label>
-                <input
-                  type="file"
-                  multiple
-                  accept="application/pdf"
-                  className="form-control"
-                  onChange={handleFileChange}
-                  disabled={uploading}
-                />
-              </div>
-              <button className="btn btn-success btn-sm" type="submit" disabled={uploading}>
-                <i className="ion-ios-cloud-upload-outline"></i>{" "}
-                {uploading ? (
-                  <>
-                    <i className="fas fa-spinner fa-spin mr-1"></i> Chargement...
-                  </>
-                ) : (
-                  "Uploader"
-                )}
-              </button>
-
-                   <button className="btn btn-secondary btn-sm ml-3" type="button" onClick={handleScanning} disabled={Scanning}>
-                <i className="fa fa-qrcode"></i>{" "}
-                {Scanning ? (
-                  <>
-                    <i className="fas fa-circle-notch fa-spin mr-1"></i> Chargement...
-                  </>
-                ) : (
-                  "Scanner"
-                )}
-              </button>
-            </form>
+            
+            {verification && (
+              <form onSubmit={handleUpload} className="mb-3">
+                <div className="form-group">
+                  <label>Importer des fichiers PDF</label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="application/pdf"
+                    className="form-control"
+                    onChange={handleFileChange}
+                    disabled={uploading}
+                  />
+                </div>
+                <button className="btn btn-success btn-sm" type="submit" disabled={uploading}>
+                  <i className="ion-ios-cloud-upload-outline"></i>{" "}
+                  {uploading ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin mr-1"></i> Chargement...
+                    </>
+                  ) : (
+                    "Uploader"
+                  )}
+                </button>
+                <button className="btn btn-secondary btn-sm ml-3" type="button" onClick={handleScanning} disabled={scanning}>
+                  <i className="fa fa-qrcode"></i>{" "}
+                  {scanning ? (
+                    <>
+                      <i className="fas fa-circle-notch fa-spin mr-1"></i> Chargement...
+                    </>
+                  ) : (
+                    "Scanner"
+                  )}
+                </button>
+              </form>
+            )}
 
             <hr />
             <table className="table table-sm table-bordered table-striped">
@@ -187,7 +184,7 @@ const DocumentModal = ({ modalId, isOpen, onClose, monid, projet, idclasseur }) 
                     <td>{doc.nom_native}</td>
                     <td>
                       <button className="btn btn-primary btn-sm mr-2" onClick={() => handleDownload(doc.id)}>
-                        <i className="fa fa-download"></i> Télécharger
+                        <i className="fa fa-eye"></i> Visualiser
                       </button>
                       <button className="btn btn-danger btn-sm" onClick={() => handleDelete(doc.id)}>
                         <i className="ion-ios-trash-outline"></i> Supprimer
