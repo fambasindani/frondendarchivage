@@ -16,16 +16,18 @@ const DashboardScreen = () => {
   const [totalResults, setTotalResults] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const history = useHistory();
-  const itemsPerPage = 4;
+  const itemsPerPage = 12;
 
 
 
   const utilisateur = JSON.parse(localStorage.getItem("utilisateur"));
+  //const role = JSON.parse(localStorage.getItem("utilisateur"));
   const nom = utilisateur?.nom || "";
   const prenom = utilisateur?.prenom || "";
   const role = utilisateur?.role || "";
   const token = GetTokenOrRedirect();
   const id_direction = utilisateur?.id_direction || "";
+  
 
   useEffect(() => {
     if (token) {
@@ -36,11 +38,16 @@ const DashboardScreen = () => {
   }, [token]);
 
   const fetchDashboardData = async () => {
+    let res
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE_URL}/declaration-dashboard`, {
-        headers: { Authorization: `Bearer ${token}` },
+      
+      
+              res = await axios.get(`${API_BASE_URL}/declaration-dashboard`, {
+              headers: { Authorization: `Bearer ${token}` },
       });
+      
+     
       setClassificateurs(res.data);
     } catch (error) {
       console.error(error);
@@ -206,8 +213,10 @@ const hundlelistedocument = (item) => {
                   <div key={classifier.nom_classeur} className="col-lg-4 col-6">
                     <div className="small-box bg-info">
                       <div className="inner">
+
                         <h5>{classifier.total}</h5>
                         <p>{classifier.nom_classeur}</p>
+                        
                       </div>
                       <div className="icon">
                         <i className="fa fa-folder-open mr-2" />

@@ -14,11 +14,18 @@ import DocumentModal from "../Modals/DocumentModal";
 const DocumentScreen = () => {
     const token = GetTokenOrRedirect();
 
+    const utilisateur = JSON.parse(localStorage.getItem("utilisateur"));
+    //const role = JSON.parse(localStorage.getItem("utilisateur"));
+
+    const role = utilisateur?.role || "";
+    const id_direction = utilisateur?.id_direction || "";
+
     // Modal documents
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [monprojet, setmonprojet] = useState(null);
     const [idclasseur, setidclasseur] = useState(null);
+    const id_user = JSON.parse(localStorage.getItem("utilisateur"))?.id;
 
     const ouvrirModalAvecId = (item) => {
         setSelectedId(item.id);
@@ -43,7 +50,7 @@ const DocumentScreen = () => {
         id_direction: "",
         id_emplacement: "",
         id_classeur: "",
-        id_user: 1, // fixe à 1
+        id_user: id_user, // fixe à 1
         date_creation: "",
         date_enregistrement: "",
         intitule: "",
@@ -165,7 +172,7 @@ const DocumentScreen = () => {
                 id_direction: "",
                 id_emplacement: "",
                 id_classeur: "",
-                id_user: 1,
+                id_user: id_user,
                 date_creation: "",
                 date_enregistrement: "",
                 intitule: "",
@@ -197,7 +204,7 @@ const DocumentScreen = () => {
                 id_direction: res.data.id_direction || "",
                 id_emplacement: res.data.id_emplacement || "",
                 id_classeur: res.data.id_classeur || "",
-                id_user: 1,
+                id_user: id_user,
                 date_creation: res.data.date_creation || "",
                 date_enregistrement: res.data.date_enregistrement || "",
                 intitule: res.data.intitule || "",
@@ -237,7 +244,7 @@ const DocumentScreen = () => {
                             id_direction: "",
                             id_emplacement: "",
                             id_classeur: "",
-                            id_user: 1,
+                            id_user: id_user,
                             date_creation: "",
                             date_enregistrement: "",
                             intitule: "",
@@ -271,7 +278,7 @@ const DocumentScreen = () => {
             id_direction: "",
             id_emplacement: "",
             id_classeur: "",
-            id_user: 1,
+            id_user: id_user,
             date_creation: "",
             date_enregistrement: "",
             intitule: "",
@@ -290,16 +297,16 @@ const DocumentScreen = () => {
             label: "Classeur",
             render: (row) => row.nom_classeur || (row.classeur && row.classeur.nom_classeur) || "N/A",
         },
-        
+
         { key: "intitule", label: "Intitulé" },
         { key: "num_reference", label: "Numéro Référence" },
         { key: "mot_cle", label: "Mot Clé" },
-      //  { key: "num_declaration", label: "Numéro Déclaration" },
+        //  { key: "num_declaration", label: "Numéro Déclaration" },
         { key: "nom_direction", label: "Direction" },
         { key: "nom_emplacement", label: "Emplacement" },
 
 
-        
+
     ];
 
     const actions = [
@@ -404,13 +411,29 @@ const DocumentScreen = () => {
                                         </div>
                                     ) : (
                                         <>
-                                            <Table
+                                            {/*  <Table
                                                 columns={columns}
                                                 data={documents}
                                                 actions={actions}
                                                 startIndex={(pagination.current_page - 1) * 20}
                                                 emptyMessage="Aucun document trouvé"
+                                            /> */}
+
+                                            <Table
+                                                columns={columns}
+                                                data={
+                                                    utilisateur.role === "admin"
+                                                        ? documents
+                                                        : documents.filter(
+                                                            (doc) => doc.id_direction === utilisateur.id_direction
+                                                        )
+                                                }
+                                                actions={actions}
+                                                startIndex={(pagination.current_page - 1) * 20}
+                                                emptyMessage="Aucun document trouvé"
                                             />
+
+
 
                                             <nav>
                                                 <ul className="pagination">

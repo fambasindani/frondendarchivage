@@ -46,20 +46,27 @@ const Menus = () => {
     };
   }, []);
 
+  const brandText = parseInt(entreprise) === 1 ? "Archiv-NP" : "Archiv-Docs";
+
   return (
     <aside ref={sidebarRef} className="main-sidebar sidebar-dark-primary elevation-4">
       {/* Logo */}
-      <a href="#" className="brand-link" style={{ backgroundColor: "gray" }}>
-        <img
-          src={`${process.env.PUBLIC_URL}/dist/img/AdminLTELogo.png`}
-          alt="AdminLTE Logo"
-          className="brand-image img-circle elevation-3"
-          style={{ opacity: ".8" }}
-        />
 
 
-        <span className="brand-text font-weight-light">AIDES-Projet</span>
-      </a>
+
+
+      {(parseInt(entreprise) === 0 || parseInt(entreprise) === 1) && (
+        <a href="#" className="brand-link" style={{ backgroundColor: "gray" }}>
+          <img
+            src={`${process.env.PUBLIC_URL}/dist/img/Log2.png`}
+            alt="AdminLTE Logo"
+            className="brand-image img-circle elevation-3"
+            style={{ opacity: ".8" }}
+          />
+          <span className="brand-text font-weight-light">{brandText}</span>
+        </a>
+      )}
+
 
       {/* Sidebar */}
       <div className="sidebar">
@@ -83,94 +90,107 @@ const Menus = () => {
 
 
 
-
-            <li className={`nav-item ${openConfigs ? "menu-open" : ""}`}>
-              <a
-                href="#"
-                className={`nav-link ${openConfigs ? "active" : ""}`}
-                onClick={toggleConfigMenus}
-              >
-                <i className="ion-podium mr-2" />
-                <p>
-                  Configuration
-                  <i className="fas fa-angle-left right" />
-                </p>
-              </a>
-
-              <ul className="nav nav-treeview" style={{ display: openConfigs ? "block" : "none" }}>
-                <li className="nav-item">
-                  <Link to="/direction" className="nav-link" onClick={fermerSidebar}>
-                    <i className="far fa-circle nav-icon" />
-                    <p>Direction</p>
-                  </Link>
-                </li>
-                <li className="nav-item">
-                  <Link to="/classeur" className="nav-link" onClick={fermerSidebar}>
-                    <i className="far fa-circle nav-icon" />
-                    <p>Classeur</p>
-                  </Link>
-                </li>
-
-                <li className="nav-item">
-                  <Link to="/centre-ordonnancement" className="nav-link" onClick={fermerSidebar}>
-                    <i className="far fa-circle nav-icon" />
-                    <p>Centre</p>
-                  </Link>
-                </li>
-
-                <li className="nav-item">
-                  <Link to="/ministere" className="nav-link" onClick={fermerSidebar}>
-                    <i className="far fa-circle nav-icon" />
-                    <p>Ministere</p>
-                  </Link>
-                </li>
+            {(role === "admin" || role === "encodeur") && (
+              <li className={`nav-item ${openConfigs ? "menu-open" : ""}`}>
+                <a
+                  href="#"
+                  className={`nav-link ${openConfigs ? "active" : ""}`}
+                  onClick={toggleConfigMenus}
+                >
+                  <i className="ion-podium mr-2" />
+                  <p>
+                    Configuration
+                    <i className="fas fa-angle-left right" />
+                  </p>
+                </a>
 
 
-              </ul>
-            </li>
 
-            {role === "adminyyy" && (
+                <ul className="nav nav-treeview" style={{ display: openConfigs ? "block" : "none" }}>
+                  {(parseInt(entreprise) === 0) && (
+                    <li className="nav-item">
+                      <Link to="/direction" className="nav-link" onClick={fermerSidebar}>
+                        <i className="far fa-circle nav-icon" />
+                        <p>Direction</p>
+                      </Link>
+                    </li>
+                  )}
+
+                   
+                  <li className="nav-item">
+                    <Link to="/classeur" className="nav-link" onClick={fermerSidebar}>
+                      <i className="far fa-circle nav-icon" />
+                      <p>Classeur</p>
+                    </Link>
+                  </li>
+
+                    {(parseInt(entreprise) === 1) && (
+                  <li className="nav-item">
+                    <Link to="/centre-ordonnancement" className="nav-link" onClick={fermerSidebar}>
+                      <i className="far fa-circle nav-icon" />
+                      <p>Centre</p>
+                    </Link>
+                  </li>
+                    )}
+
+
+                  <li className="nav-item">
+                    <Link to="/emplacement" className="nav-link" onClick={fermerSidebar}>
+                      <i className="far fa-circle nav-icon" />
+                      <p>Emplacement</p>
+                    </Link>
+                  </li>
+                    
+
+                     {(parseInt(entreprise) === 1) && (
+                  <li className="nav-item">
+                    <Link to="/ministere" className="nav-link" onClick={fermerSidebar}>
+                      <i className="far fa-circle nav-icon" />
+                      <p>Artile budgétaire</p>
+                    </Link>
+                  </li>
+                     )}
+
+
+
+
+                </ul>
+              </li>
+            )}
+
+
+
+
+
+            {((role === "admin" || role === "encodeur") && (parseInt(entreprise) === 0)) && (
               <li className="nav-item">
-                <Link to="/personnel" className="nav-link" onClick={fermerSidebar}>
-                  <i className="fa fa-users mr-2" />
-                  <p>Personnels</p>
+                <Link to="/document" className="nav-link" onClick={fermerSidebar}>
+                  <i className="fa fa-layer-group mr-2" />
+                  <p>Document</p>
+                </Link>
+              </li>
+            )}
+
+            {((role === "admin" || role === "encodeur") && (parseInt(entreprise) === 1)) && (
+              <li className="nav-item">
+                <Link to="/note-perception" className="nav-link" onClick={fermerSidebar}>
+                  <i className="fa fa-layer-group mr-2" />
+                  <p>Note-Perception</p>
                 </Link>
               </li>
             )}
 
 
-            <li className="nav-item">
-              <Link to="/emplacement" className="nav-link" onClick={fermerSidebar}>
-                <i className="ion-ios-toggle-outline mr-2" />
-                <p>Emplacement</p>
-              </Link>
-            </li>
+            {role === "admin" && (
+              <li className="nav-item">
+                <Link to="/utilisateur" className="nav-link" onClick={fermerSidebar}>
+                  <i className="fa fa-user mr-2" />
+                  <p>Utilisateur</p>
+                </Link>
+              </li>
+            )}
 
-            <li className="nav-item">
-              <Link to="/document" className="nav-link" onClick={fermerSidebar}>
-                <i className="fa fa-layer-group mr-2" />
-                <p>Document</p>
-              </Link>
-            </li>
-
-
-            <li className="nav-item">
-              <Link to="/note-perception" className="nav-link" onClick={fermerSidebar}>
-                <i className="fa fa-layer-group mr-2" />
-                <p>Note-Perception</p>
-              </Link>
-            </li>
-
-
-
-            <li className="nav-item">
-              <Link to="/utilisateur" className="nav-link" onClick={fermerSidebar}>
-                <i className="fa fa-user mr-2" />
-                <p>Utilisateur</p>
-              </Link>
-            </li>
-
-            {role === "admins" && (
+            {/*    {role === "admins" && (
               <li className={`nav-item ${openConfig ? "menu-open" : ""}`}>
                 <a
                   href="#"
@@ -221,16 +241,18 @@ const Menus = () => {
 
                 </ul>
               </li>
-            )}
+            )} */}
 
-            {role === "admin" && (
+            {/*     {role === "admin" && (
               <li className="nav-item">
                 <Link to="/utilisateur" className="nav-link" onClick={fermerSidebar}>
                   <i className="fa fa-lock mr-2" />
                   <p>Sécurité</p>
                 </Link>
               </li>
-            )}
+            )} */}
+
+
           </ul>
         </nav>
       </div>

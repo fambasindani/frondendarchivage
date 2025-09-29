@@ -3,7 +3,7 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import { API_BASE_URL } from "../config";
 
-const ModalNote = ({ modalId, isOpen, onClose, monid, projet, idclasseur, idcentre }) => {
+const ModalNote = ({ modalId, isOpen, onClose, monid, projet, idclasseur, idcentre, verification }) => {
   const [fichiers, setFichiers] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -138,6 +138,7 @@ const ModalNote = ({ modalId, isOpen, onClose, monid, projet, idclasseur, idcent
           </div>
 
           <div className="modal-body">
+              {verification && (
             <form onSubmit={handleUpload} className="mb-3">
               <div className="form-group">
                 <label>Importer des fichiers PDF</label>
@@ -172,6 +173,7 @@ const ModalNote = ({ modalId, isOpen, onClose, monid, projet, idclasseur, idcent
                 )}
               </button>
             </form>
+              )}
 
             <hr />
             <table className="table table-sm table-bordered table-striped">
@@ -189,7 +191,7 @@ const ModalNote = ({ modalId, isOpen, onClose, monid, projet, idclasseur, idcent
                     <td>{doc.nom_native}</td>
                     <td>
                       <button className="btn btn-primary btn-sm mr-2" onClick={() => handleDownload(doc.id)}>
-                        <i className="fa fa-download"></i> Télécharger
+                        <i className="fa fa-eye"></i> Télécharger
                       </button>
                       <button className="btn btn-danger btn-sm" onClick={() => handleDelete(doc.id)}>
                         <i className="ion-ios-trash-outline"></i> Supprimer

@@ -38,62 +38,68 @@ const ListeDocumentScreen = () => {
     const selectedDirection = state.selectedDirection || null;
 
 
+    const utilisateur = JSON.parse(localStorage.getItem("utilisateur"));
+    //const role = JSON.parse(localStorage.getItem("utilisateur"));
+    const nom = utilisateur?.nom || "";
+    const prenom = utilisateur?.prenom || "";
+    const role = utilisateur?.role || "";
+    const id_direction = utilisateur?.id_direction || "";
 
 
-const Actualiser = () => {
-    setSearch(''); // Réinitialiser le champ de recherche
-   // setPagination({ current_page: 1 }); // Réinitialiser la pagination
-};
+    const Actualiser = () => {
+        setSearch(''); // Réinitialiser le champ de recherche
+        // setPagination({ current_page: 1 }); // Réinitialiser la pagination
+    };
 
-useEffect(() => {
-    if (token) {
-        fetchDocuments(); // Appeler fetchDocuments au chargement initial et sur les dépendances
-     
-       // alert(item.nom_classeur)
-    }
-}, [pagination.current_page, modeRecherche, token, search]); // Ajoutez 'search' ici
+    useEffect(() => {
+        if (token) {
+            fetchDocuments(); // Appeler fetchDocuments au chargement initial et sur les dépendances
 
-const fetchDocuments = async () => {
-    if (!token) return;
-
-    setLoading(true);
-    try {
-        let res;
-
-        if (modeRecherche && search.trim() !== "") {
-            res = await axios.post(
-                `${API_BASE_URL}/searchDeclarationsfiltres/${id}`,
-                { search, page: pagination.current_page },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-        } else {
-            if (!selectedDirection) {
-                res = await axios.get(`${API_BASE_URL}/listedeclaration/${id}/?page=${pagination.current_page}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-            } else {
-                res = await axios.post(`${API_BASE_URL}/listedeclaration/${id}?page=${pagination.current_page}`, {
-                    id_direction: selectedDirection
-                }, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-            }
+            // alert(item.nom_classeur)
         }
+    }, [pagination.current_page, modeRecherche, token, search]); // Ajoutez 'search' ici
 
-        // Traitement des résultats
-        const mesitem = item.nom_classeur;
-       // const mesitem= SetdocumentNom(item.nom_classeur)
-        SetdocumentNom(res.data.total === 1 ? `Liste de ${mesitem}` : `Liste des ${mesitem}s`);
+    const fetchDocuments = async () => {
+        if (!token) return;
 
-        setDocuments(res.data.data);
-        setPagination({ current_page: res.data.current_page, last_page: res.data.last_page });
-    } catch (err) {
-        console.error(err);
-        Swal.fire("Erreur", "Erreur lors du chargement des documents", "error");
-    } finally {
-        setLoading(false);
-    }
-};
+        setLoading(true);
+        try {
+            let res;
+
+            if (modeRecherche && search.trim() !== "") {
+                res = await axios.post(
+                    `${API_BASE_URL}/searchDeclarationsfiltres/${id}`,
+                    { search, page: pagination.current_page },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+            } else {
+                if (!selectedDirection) {
+                    res = await axios.get(`${API_BASE_URL}/listedeclaration/${id}/?page=${pagination.current_page}`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
+                } else {
+                    res = await axios.post(`${API_BASE_URL}/listedeclaration/${id}?page=${pagination.current_page}`, {
+                        id_direction: selectedDirection
+                    }, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                }
+            }
+
+            // Traitement des résultats
+            const mesitem = item.nom_classeur;
+            // const mesitem= SetdocumentNom(item.nom_classeur)
+            SetdocumentNom(res.data.total === 1 ? `Liste de ${mesitem}` : `Liste des ${mesitem}s`);
+
+            setDocuments(res.data.data);
+            setPagination({ current_page: res.data.current_page, last_page: res.data.last_page });
+        } catch (err) {
+            console.error(err);
+            Swal.fire("Erreur", "Erreur lors du chargement des documents", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
 
 
 
@@ -107,7 +113,7 @@ const fetchDocuments = async () => {
         fetchDocuments();
     };
 
-     
+
 
     const handlePageChange = (page) => {
         if (page >= 1 && page <= pagination.last_page) {
@@ -175,16 +181,16 @@ const fetchDocuments = async () => {
                                     Rechercher
                                 </button>
 
-                                   <button
+                                <button
                                     className="btn btn-info ml-2"
                                     onClick={Actualiser}
                                 >
                                     Actualiser
                                 </button>
                             </div>
-                               
-                             
-                            
+
+
+
                         </div>
 
                         {loading ? (
@@ -202,11 +208,23 @@ const fetchDocuments = async () => {
                             </div>
                         ) : (
                             <>
-                                <Table
+                              {/*   <Table
                                     columns={columns}
                                     data={documents}
                                     emptyMessage="Aucun document trouvé"
+                                /> */}
+
+                                <Table
+                                    columns={columns}
+                                    data={
+                                        
+                                        role === "admin"
+                                            ? documents
+                                            : documents.filter(doc => doc.id_direction === utilisateur.id_direction)
+                                    }
+                                    emptyMessage="Aucun document trouvé"
                                 />
+
                                 <nav>
                                     <ul className="pagination">
                                         <li className={`page-item ${pagination.current_page === 1 ? "disabled" : ""}`}>

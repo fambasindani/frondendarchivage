@@ -16,6 +16,9 @@ import ModalNote from "../Modals/ModalNote";
 
 
 const NoteperceptionScreen = () => {
+    
+       const id_user = JSON.parse(localStorage.getItem("utilisateur"))?.id;
+
     const [notes, setNotes] = useState([]);
     const [selectedNom, setSelectedNom] = useState('');
 
@@ -55,7 +58,7 @@ const NoteperceptionScreen = () => {
         date_ordonnancement: "",
         date_enregistrement: "",
         id_classeur: "",
-        id_user: 1,
+        id_user: id_user,
         id_centre_ordonnancement: "",
         id_assujetti: "",
         id_emplacement: "",
@@ -223,7 +226,7 @@ const NoteperceptionScreen = () => {
                 date_ordonnancement: "",
                 date_enregistrement: "",
                 id_classeur: "",
-                id_user: 1,
+                id_user: id_user,
                 id_centre_ordonnancement: "",
                 id_assujetti: "", // Vous pouvez le laisser vide ou mettre l'ID ici
                 id_emplacement: "",
@@ -261,7 +264,7 @@ const NoteperceptionScreen = () => {
             date_ordonnancement: res.data.date_ordonnancement || "",
             date_enregistrement: res.data.date_enregistrement || "",
             id_classeur: res.data.id_classeur || "",
-            id_user: 1,
+            id_user: id_user,
             id_centre_ordonnancement: res.data.id_centre_ordonnancement || "",
             id_assujetti: res.data.id_assujetti || "",
             id_emplacement: res.data.id_emplacement || "",
@@ -304,7 +307,7 @@ const NoteperceptionScreen = () => {
                             date_ordonnancement: "",
                             date_enregistrement: "",
                             id_classeur: "",
-                            id_user: 1,
+                            id_user: id_user,
                             id_centre_ordonnancement: "",
                             id_assujetti: "",
                             id_emplacement: "",
@@ -338,7 +341,7 @@ const NoteperceptionScreen = () => {
             date_ordonnancement: "",
             date_enregistrement: "",
             id_classeur: "",
-            id_user: 1,
+            id_user: id_user,
             id_centre_ordonnancement: "",
             id_assujetti: "",
             id_emplacement: "",

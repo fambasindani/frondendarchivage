@@ -15,13 +15,15 @@ const Tableaudebordnote = () => {
   const [articles, setArticles] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 4;
+  const itemsPerPage = 12;
 
-   const history = useHistory();
+  const history = useHistory();
 
   const token = GetTokenOrRedirect();
 
+ 
   useEffect(() => {
+    
     if (token) {
       fetchDashboardData();
       fetchArticles();
@@ -56,20 +58,38 @@ const Tableaudebordnote = () => {
     }
   };
 
-  const handleSearch = () => {
+
+
+
+  const handleSearch = async () => {
+    //alert(selectedArticle)
     if (!searchTerm.trim() && !selectedArticle) {
       Swal.fire("Info", "Veuillez remplir au moins un champ pour la recherche.", "info");
       return;
     }
 
-    const results = centres.filter((centre) => {
-      const matchNom = centre.centre_ordonnancement.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchArticle = selectedArticle ? centre.nom === selectedArticle : true;
-      return matchNom && matchArticle;
-    });
+    setLoading(true); // Affiche le chargement
+    try {
+      // Formez l'URL de l'API avec l'ID de l'article budgétaire
+      const url = `${API_BASE_URL}/note-perception-dashboard/${selectedArticle}`;
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    setFilteredCentres(results);
-    setCurrentPage(1);
+      // Filtrer les résultats selon le nom du centre
+      const results = res.data.filter((centre) => {
+        const matchNom = centre.centre_ordonnancement.toLowerCase().includes(searchTerm.toLowerCase());
+        return matchNom; // Ici, nous filtrons uniquement par le nom du centre
+      });
+
+      setFilteredCentres(results);
+      setCurrentPage(1);
+    } catch (error) {
+      console.error(error);
+      Swal.fire("Erreur", "Impossible de charger les données de la recherche.", "error");
+    } finally {
+      setLoading(false); // Masque le chargement
+    }
   };
 
   const handleReset = () => {
@@ -87,26 +107,26 @@ const Tableaudebordnote = () => {
 
 
 
-  const hundlendlistenote=(item)=>{
-   //  history.push("/listenote");
-   // alert("hhhhhhhhhhhhhhhhh") noteid-searchnote
+  const hundlendlistenote = (item) => {
+    //  history.push("/listenote");
+    // alert("hhhhhhhhhhhhhhhhh") noteid-searchnote
 
-   
 
-    if (selectedArticle=="") {
-    history.push({
+
+    if (selectedArticle == "") {
+      history.push({
         pathname: `/listenote/${item.id_centre}`, // chemin de la route
         state: { item, selectedArticle } // passage de l'objet item dans l'état
-    });
-  }
-  else{
-       history.push({
+      });
+    }
+    else {
+      history.push({
         pathname: `/listenote/${item.id_centre}`, // chemin de la route
         state: { item, selectedArticle } // passage de l'objet item dans l'état
-    });
+        });
 
-    
-  } 
+
+    }
   }
 
   return (
@@ -120,7 +140,7 @@ const Tableaudebordnote = () => {
               <i className="ion-ios-speedometer-outline mr-2" /> Tableau de Bord pour Note de perception
             </h5>
             <div className="row mb-2">
-              <div className="col-sm-4">
+            {/*   <div className="col-sm-4">
                 <input
                   type="text"
                   className="form-control"
@@ -128,7 +148,7 @@ const Tableaudebordnote = () => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-              </div>
+              </div> */}
               <div className="col-sm-4">
                 <select
                   className="form-control"
@@ -137,8 +157,8 @@ const Tableaudebordnote = () => {
                 >
                   <option value="">Sélectionner un article budgétaire</option>
                   {articles.map((article) => (
-                    <option key={article.id} value={article.nom}>
-                      {article.nom}
+                    <option key={article.id} value={article.id}> {/* Utilisation de l'ID comme valeur */}
+                      {article.nom} {/* Affichage du nom de l'article */}
                     </option>
                   ))}
                 </select>
@@ -176,10 +196,10 @@ const Tableaudebordnote = () => {
                         <i className="fa fa-folder-open mr-2" />
                       </div>
                       <a
-                        
-                            onClick={() => hundlendlistenote(centre)}
-                          
-                        
+
+                        onClick={() => hundlendlistenote(centre)}
+
+
                         className="small-box-footer"
                         style={{ cursor: "pointer" }}
                       >

@@ -9,6 +9,7 @@ import Menus from "../Composant/Menus";
 import Head from "../Composant/Head";
 import DocumentModal from "../Modals/DocumentModal";
 import { useLocation, useParams } from "react-router-dom/cjs/react-router-dom.min";
+import ModalNote from "../Modals/ModalNote";
 
 const ListenoteScreen = () => {
   const token = GetTokenOrRedirect();
@@ -42,6 +43,7 @@ const ListenoteScreen = () => {
   useEffect(() => {
     if (token) {
       fetchDocuments();
+     // alert(token)
     }
   }, [pagination.current_page, modeRecherche, token]);
 
@@ -52,17 +54,51 @@ const ListenoteScreen = () => {
     try {
       let res;
 
+    
       if (modeRecherche && search.trim() !== "") {
         res = await axios.post(
-          `${API_BASE_URL}/notes/search?page=${pagination.current_page}`,
+          `${API_BASE_URL}/search-note/${id}?page=${pagination.current_page}`,
+          { search },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+      
+      
+      else {
+        res = await axios.get(`${API_BASE_URL}/note-centre/${id}?page=${pagination.current_page}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } 
+
+
+        
+      
+      
+     /*  if (modeRecherche && search.trim() !== "") {
+              res = await axios.post(
+          `${API_BASE_URL}/search-note/${id}?page=${pagination.current_page}`,
           { search },
           { headers: { Authorization: `Bearer ${token}` } }
         );
       } else {
-        res = await axios.get(`${API_BASE_URL}/note-centre/${id}?page=${pagination.current_page}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      }
+            if (!selectedCentre) {
+              alert("je suis sans filtre")
+                res = await axios.get(`${API_BASE_URL}/note-centre/${id}/?page=${pagination.current_page}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+            } else {
+             // alert("")
+                res = await axios.post(`${API_BASE_URL}/search-note/${id}?page=${pagination.current_page}`, {
+                    id_centre: selectedCentre
+                }, 
+                
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+            }
+        } */
+
+
 
       setDocuments(res.data.data);
       setPagination({
@@ -95,7 +131,7 @@ const ListenoteScreen = () => {
 
   const ouvrirModalAvecId = (row) => {
     setSelectedId(row.id);
-    setMonProjet(row.centre?.nom || "");
+    setMonProjet(row.assujetti?.nom_raison_sociale || "");
     setIdClasseur(row.id_classeur);
     setIsModalOpen(true);
   };
@@ -228,7 +264,7 @@ const ListenoteScreen = () => {
           </div>
         </section>
       </div>
-
+{/* 
       <DocumentModal
         modalId="documentModal"
         isOpen={isModalOpen}
@@ -237,7 +273,26 @@ const ListenoteScreen = () => {
         projet={monProjet}
         idclasseur={idclasseur}
         verification={false}
-      />
+      /> */}
+
+
+               <ModalNote
+                modalId="documentModal"
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                monid={selectedId} // id personnel
+                projet={monProjet} // id classeur
+                idclasseur={idclasseur}
+               // idcentre={idcentre}
+                verification={false}
+            />
+
+
+
+
+
+
+
     </div>
   );
 };
