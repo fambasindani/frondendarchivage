@@ -1,737 +1,608 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
 import Head from "../Composant/Head";
 import Menus from "../Composant/Menus";
-import Button from "../Composant/Button";
-import Input from "../Composant/Input";
 import Table from "../Composant/Table";
 import { API_BASE_URL } from "../config";
 import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
-import Droplist from "../Composant/DropList ";
-import ModalAssujetti from "../Modals/ModalAssujetti";
-import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
-import ModalNote from "../Modals/ModalNote";
-
-
+import { useHistory } from "react-router-dom";
+import { 
+  FaPlus, 
+  FaSearch, 
+  FaSync,
+  FaFileAlt,
+  FaEdit,
+  FaTrash,
+  FaDownload,
+  FaEllipsisV,
+  FaEye,
+  FaBuilding,
+  FaMapMarkerAlt,
+  FaFolder
+} from 'react-icons/fa';
+import LoadingSpinner from "../Loading/LoadingSpinner";
 
 const NoteperceptionScreen = () => {
-    
-       const id_user = JSON.parse(localStorage.getItem("utilisateur"))?.id;
+  const token = GetTokenOrRedirect();
+  const utilisateur = JSON.parse(localStorage.getItem("utilisateur"));
+  const role = utilisateur?.role || "";
+  const id_centre = utilisateur?.id_centre || "";
+  
+  const history = useHistory();
 
-    const [notes, setNotes] = useState([]);
-    const [selectedNom, setSelectedNom] = useState('');
+  // Notes + pagination + recherche
+  const [notes, setNotes] = useState([]);
+  const [pagination, setPagination] = useState({ 
+    current_page: 1, 
+    last_page: 1,
+    total: 0,
+    per_page: 20
+  });
+  const [modeRecherche, setModeRecherche] = useState(false);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
 
+  // Statistiques
+  const [statsCards, setStatsCards] = useState([
+    {
+      id: 1,
+      title: "Total Notes",
+      value: "0",
+      icon: <FaFileAlt style={{ fontSize: '24px' }} />,
+      color: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      description: "Toutes les notes"
+    },
+    {
+      id: 2,
+      title: "Notes Actives",
+      value: "0",
+      icon: <FaFileAlt style={{ fontSize: '24px' }} />,
+      color: "linear-gradient(135deg, #20c997 0%, #17a2b8 100%)",
+      description: "Notes actives"
+    },
+    {
+      id: 3,
+      title: "Notes Inactives",
+      value: "0",
+      icon: <FaFileAlt style={{ fontSize: '24px' }} />,
+      color: "linear-gradient(135deg, #ffc107 0%, #fd7e14 100%)",
+      description: "Notes inactives"
+    }
+  ]);
 
-    const selectnom = (assujetti) => {
-        setSelectedNom(assujetti);
-        //  alert(assujetti.id)
-        // Vous pouvez également ajouter d'autres logiques ici si nécessaire
-    };
+  // Navigation
+  const handleAddNote = () => {
+    history.push('/note/form');
+  };
 
+  const handleEditNote = (note) => {
+    history.push(`/note/form/${note.id}`);
+  };
 
-    // Modal documents
-    const [isModalNoteOpen, setIsModalNoteOpen] = useState(false);
-    const [selectedId, setSelectedId] = useState(null);
-    const [monprojet, setmonprojet] = useState(null);
-    const [idclasseur, setidclasseur] = useState(null);
-    const [idcentre, setidcentre] = useState(null);
+  const handleViewNote = (note) => {
+    history.push(`/note/detail/${note.id}`);
+  };
 
-    const ouvrirModalAvecId = (item) => {
-        setSelectedId(item.id);
-        setmonprojet(item.assujetti.nom_raison_sociale);
-       // alert(item.centre.nom+"  "+item.id_centre_ordonnancement)
-       // alert(item.classeur.nom_classeur+"  "+item.id_classeur)
-        setidclasseur(item.id_classeur)
-        setidcentre(item.id_centre_ordonnancement)
-        setIsModalNoteOpen(true);
-        
-    };
+  // Chargement des notes
+  useEffect(() => {
+    if (token) {
+      fetchNotes();
+    }
+  }, [pagination.current_page, modeRecherche, token]);
 
-
-
-
-
-    const [formData, setFormData] = useState({
-        id_ministere: "",
-        numero_serie: "",
-        date_ordonnancement: "",
-        date_enregistrement: "",
-        id_classeur: "",
-        id_user: id_user,
-        id_centre_ordonnancement: "",
-        id_assujetti: "",
-        id_emplacement: "",
-    });
-
-
-
-
-    // ... (other state and functions remain unchanged)
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    //  const [errors, setErrors] = useState({ id_assujetti: [] });
-
-    // Fonction pour gérer la sélection d'un assujetti
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    const [errors, setErrors] = useState({});
-    const [search, setSearch] = useState("");
-    const [pagination, setPagination] = useState({ current_page: 1, last_page: 1 });
-    const [noteEnEdition, setNoteEnEdition] = useState(null);
-    const [modeRecherche, setModeRecherche] = useState(false);
-    const [valeurtable, setValeurtable] = useState(true);
-    const [loading, setLoading] = useState(false);
-
-    const [directions, setDirections] = useState([]);
-    const [assujettis, setAssujettis] = useState([]);
-    const [classeurs, setClasseurs] = useState([]);
-    const [emplacements, setEmplacements] = useState([]);
-    const [centres, setCentres] = useState([]);
-    const history = useHistory();
-
-    const token = GetTokenOrRedirect();
-
-    useEffect(() => {
-        if (token) {
-            fetchNotes();
-            fetchDropdowns();
-        }
-    }, [pagination.current_page, modeRecherche, token]);
-
-    const fetchNotes = async () => {
-        if (!token) return;
-
-        setLoading(true);
-
-        try {
-            let res;
-            if (modeRecherche && search.trim() !== "") {
-                res = await axios.post(
-                    `${API_BASE_URL}/notes/search?search=${search}&page=${pagination.current_page}`,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-            } else {
-                res = await axios.get(`${API_BASE_URL}/notes?page=${pagination.current_page}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-            }
-            setNotes(res.data.data);
-            setPagination({ current_page: res.data.current_page, last_page: res.data.last_page });
-        } catch (err) {
-            console.error(err);
-            Swal.fire("Erreur", "Erreur lors du chargement des notes de perception", "error");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchDropdowns = async () => {
-
-        if (!token) return;
-
-
-        try {
-            const [resDirections, resAssujettis, resClasseurs, resEmplacements, resCentres] = await Promise.all([
-                axios.get(`${API_BASE_URL}/articleall`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${API_BASE_URL}/assujettis`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${API_BASE_URL}/classeur`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${API_BASE_URL}/emplacements`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${API_BASE_URL}/centre_ordonnancements/all`, { headers: { Authorization: `Bearer ${token}` } }),
-            ]);
-
-
-            setDirections(resDirections.data.data || resDirections.data);
-            setAssujettis(resAssujettis.data.data || resAssujettis.data);
-            setClasseurs(resClasseurs.data.data || resClasseurs.data);
-            setEmplacements(resEmplacements.data.data || resEmplacements.data);
-            setCentres(resCentres.data.data || resCentres.data);
-        } catch (err) {
-            console.error(err);
-            console.error("Erreur lors du chargement des dropdowns :", err.response || err.message);
-            Swal.fire("Erreur", "Erreur lors du chargement des listes", "error");
-        }
-    };
-
-    const handleSearch = () => {
-        setPagination((prev) => ({ ...prev, current_page: 1 }));
-        setModeRecherche(true);
-    };
-
-    const actualiser = () => {
-        setSearch("");
-        setModeRecherche(false);
-        setPagination({ current_page: 1, last_page: 1 });
-    };
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({
-            ...prev,
-            [name]: value,
-        }));
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setErrors({});
-        if (!token) return;
-
-        // Vérifiez si selectedNom est défini pour id_assujetti
-        if (!selectedNom) {
-            Swal.fire("Erreur", "Veuillez sélectionner un assujetti avant de soumettre le formulaire.", "error");
-             return;
-            
-        }
-
-        // Mettez à jour id_assujetti avec selectedNom.id
-        const updatedFormData = {
-            ...formData,
-            id_assujetti: selectedNom.id, // Utilisez l'ID de l'assujetti sélectionné
-        };
-
-        try {
-            if (noteEnEdition) {
-                await axios.put(
-                    `${API_BASE_URL}/notes/${noteEnEdition}`,
-                    updatedFormData,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-                Swal.fire("Succès", "Note modifiée avec succès", "success");
-
-            } else {
-                await axios.post(
-                    `${API_BASE_URL}/notes`,
-                    updatedFormData,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-                Swal.fire("Succès", "Note ajoutée avec succès", "success");
-            }
-
-            // Réinitialisation après soumission
-            setFormData({
-                id_ministere: "",
-                numero_serie: "",
-                date_ordonnancement: "",
-                date_enregistrement: "",
-                id_classeur: "",
-                id_user: id_user,
-                id_centre_ordonnancement: "",
-                id_assujetti: "", // Vous pouvez le laisser vide ou mettre l'ID ici
-                id_emplacement: "",
-            });
-            setNoteEnEdition(null);
-            setValeurtable(true);
-            setModeRecherche(false);
-            setSearch("");
-            setPagination({ current_page: 1, last_page: 1 });
-            fetchNotes();
-            setSelectedNom("");
-        } catch (error) {
-            if (error.response?.data?.errors) {
-                setErrors(error.response.data.errors);
-            } else {
-                Swal.fire("Erreur", "Erreur lors de l'enregistrement", "error");
-            }
-        }
-    };
-
-
-
-  const handleEdit = async (id) => {
+  const fetchNotes = async () => {
     if (!token) return;
 
+    setLoading(true);
     try {
-        const res = await axios.get(`${API_BASE_URL}/notes/${id}`, {
-            headers: { Authorization: `Bearer ${token}` },
+      let res;
+      if (modeRecherche && search.trim() !== "") {
+        res = await axios.post(
+          `${API_BASE_URL}/notes/search`,
+          { search, page: pagination.current_page },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } else {
+        res = await axios.get(`${API_BASE_URL}/notes?page=${pagination.current_page}`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
-        
-        // Mettre à jour le formData avec les détails de la note
-        setFormData({
-            id_ministere: res.data.id_ministere || "",
-            numero_serie: res.data.numero_serie || "",
-            date_ordonnancement: res.data.date_ordonnancement || "",
-            date_enregistrement: res.data.date_enregistrement || "",
-            id_classeur: res.data.id_classeur || "",
-            id_user: id_user,
-            id_centre_ordonnancement: res.data.id_centre_ordonnancement || "",
-            id_assujetti: res.data.id_assujetti || "",
-            id_emplacement: res.data.id_emplacement || "",
-        });
+      }
 
-        // Mettre à jour selectedNom avec les détails de l'assujetti
-        if (res.data.assujetti) {
-            setSelectedNom(res.data.assujetti);
+      console.log("Données reçues:", res.data);
+      
+      setNotes(res.data.data);
+      setPagination({ 
+        current_page: res.data.current_page, 
+        last_page: res.data.last_page,
+        total: res.data.total,
+        per_page: res.data.per_page || 20
+      });
+
+      // Mettre à jour les statistiques
+      const total = res.data.total || res.data.data.length;
+      const actifs = res.data.data.filter(n => n.statut === true || n.statut === 1).length;
+      const inactifs = total - actifs;
+
+      setStatsCards([
+        {
+          id: 1,
+          title: "Total Notes",
+          value: total.toString(),
+          icon: <FaFileAlt style={{ fontSize: '24px' }} />,
+          color: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          description: "Toutes les notes"
+        },
+        {
+          id: 2,
+          title: "Notes Actives",
+          value: actifs.toString(),
+          icon: <FaFileAlt style={{ fontSize: '24px' }} />,
+          color: "linear-gradient(135deg, #20c997 0%, #17a2b8 100%)",
+          description: `${actifs > 0 ? Math.round((actifs / total) * 100) : 0}% actives`
+        },
+        {
+          id: 3,
+          title: "Notes Inactives",
+          value: inactifs.toString(),
+          icon: <FaFileAlt style={{ fontSize: '24px' }} />,
+          color: "linear-gradient(135deg, #ffc107 0%, #fd7e14 100%)",
+          description: `${inactifs > 0 ? Math.round((inactifs / total) * 100) : 0}% inactives`
         }
-
-        setNoteEnEdition(id);
-        setValeurtable(false);
+      ]);
     } catch (err) {
-        console.error(err);
-        Swal.fire("Erreur", "Erreur lors du chargement de la note", "error");
+      console.error(err);
+      Swal.fire("Erreur", "Erreur lors du chargement des notes", "error");
+    } finally {
+      setLoading(false);
     }
-};
+  };
 
-    const handleDelete = (id) => {
-        if (!token) return;
+  const handleSearch = () => {
+    setPagination((prev) => ({ ...prev, current_page: 1 }));
+    setModeRecherche(true);
+  };
 
-        Swal.fire({
-            title: "Voulez-vous désactiver cette note de perception ?",
-            text: "Cette action va désactiver la note.",
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#3085d6",
-            cancelButtonColor: "#d33",
-            confirmButtonText: "Oui, supprimer",
-            cancelButtonText: "Annuler",
-        }).then((result) => {
-            if (result.isConfirmed) {
-                axios
-                    .delete(`${API_BASE_URL}/notes/${id}`, { headers: { Authorization: `Bearer ${token}` } })
-                    .then(() => {
-                        Swal.fire("Supprimé !", "Note désactivée avec succès.", "success");
-                        setFormData({
-                            id_ministere: "",
-                            numero_serie: "",
-                            date_ordonnancement: "",
-                            date_enregistrement: "",
-                            id_classeur: "",
-                            id_user: id_user,
-                            id_centre_ordonnancement: "",
-                            id_assujetti: "",
-                            id_emplacement: "",
-                        });
-                        setNoteEnEdition(null);
-                        setValeurtable(true);
-                        setModeRecherche(false);
-                        setSearch("");
-                        setPagination({ current_page: 1, last_page: 1 });
-                        fetchNotes();
-                    })
-                    .catch((error) => {
-                        Swal.fire("Erreur", "Une erreur est survenue lors de la suppression.", "error");
-                        console.error(error);
-                    });
-            }
-        });
-    };
+  const actualiser = () => {
+    setSearch("");
+    setModeRecherche(false);
+    setPagination({ current_page: 1, last_page: 1 });
+  };
 
-    const handlePageChange = (page) => {
-        if (page >= 1 && page <= pagination.last_page) {
-            setPagination((prev) => ({ ...prev, current_page: page }));
-        }
-    };
+  const handleDelete = (id, numero_serie) => {
+    if (!token) return;
 
-    // IMPORTANT : ne PAS toucher à valeurtable ici pour ne pas casser la bascule
-    const handleCancelEdit = () => {
-        setFormData({
-            id_ministere: "",
-            numero_serie: "",
-            date_ordonnancement: "",
-            date_enregistrement: "",
-            id_classeur: "",
-            id_user: id_user,
-            id_centre_ordonnancement: "",
-            id_assujetti: "",
-            id_emplacement: "",
-        });
-        setNoteEnEdition(null);
-        setErrors({});
-    };
+    Swal.fire({
+      title: "Voulez-vous désactiver cette note ?",
+      html: `Êtes-vous sûr de vouloir désactiver la note :<br><strong>"${numero_serie}"</strong> ?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Oui, désactiver",
+      cancelButtonText: "Annuler",
+      reverseButtons: true
+    }).then((result) => {
+      if (result.isConfirmed) {
+        axios
+          .delete(`${API_BASE_URL}/notes/${id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          .then(() => {
+            Swal.fire("Désactivé !", "Note désactivée avec succès.", "success");
+            fetchNotes();
+          })
+          .catch((error) => {
+            Swal.fire("Erreur", "Erreur lors de la désactivation.", "error");
+            console.error(error);
+          });
+      }
+    });
+  };
 
-    const columns = [
-        { key: "numero_serie", label: "Num. Série" },
-        { key: "date_ordonnancement", label: "Date Ord." },
-        { key: "date_enregistrement", label: "Date Enr." },
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= pagination.last_page) {
+      setPagination((prev) => ({ ...prev, current_page: page }));
+    }
+  };
 
+  // Formatage sécurisé des dates
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    try {
+      return new Date(dateString).toLocaleDateString('fr-FR');
+    } catch (e) {
+      return dateString;
+    }
+  };
 
-        {
-            key: "classeur",
-            label: "Classeur",
-            render: (row) => row.classeur ? row.classeur.nom_classeur : "N/A",
-        },
+  // Colonnes du tableau SANS centre et classeur
+  const columns = [
+    { 
+      key: "numero_serie", 
+      label: "Num. Série",
+      render: (row) => (
+        <div>
+          <div className="font-weight-bold">{row.numero_serie || "N/A"}</div>
+        </div>
+      )
+    },
+    { 
+      key: "date_ordonnancement", 
+      label: "Date Ord.",
+      render: (row) => formatDate(row.date_ordonnancement)
+    },
+    { 
+      key: "date_enregistrement", 
+      label: "Date Enr.",
+      render: (row) => formatDate(row.date_enregistrement)
+    },
+    {
+      key: "assujetti",
+      label: "Assujetti",
+      render: (row) => {
+        return row.assujetti?.nom_raison_sociale || row.nom_assujetti || "N/A";
+      }
+    },
+    {
+      key: "emplacement",
+      label: "Emplacement",
+      render: (row) => {
+        const nomEmplacement = row.emplacement?.nom_emplacement || row.nom_emplacement || "N/A";
+        return (
+          <div className="d-flex align-items-center">
+            <FaMapMarkerAlt className="mr-2 text-muted" />
+            {nomEmplacement}
+          </div>
+        );
+      }
+    },
+    { 
+      key: "statut", 
+      label: "Statut",
+      render: (row) => (
+        <span className={`badge ${row.statut ? 'badge-success' : 'badge-secondary'}`}>
+          {row.statut ? 'Actif' : 'Inactif'}
+        </span>
+      )
+    }
+  ];
 
-
-
-        {
-            key: "centre",
-            label: "Centre Ord.",
-            render: (row) => row.centre ? row.centre.nom : "N/A",
-        },
-
-        {
-            key: "assujetti.nom_raison_sociale",
-            label: "Assujetti",
-            render: (row) => row.assujetti ? row.assujetti.nom_raison_sociale : "N/A",
-        },
-
-
-
-
-        {
-            key: "emplacement",
-            label: "Emplacement",
-            render: (row) => row.emplacement ? row.emplacement.nom_emplacement : "N/A",
-        },
-    ];
+  // Composant Dropdown d'actions
+  const ActionDropdown = ({ note }) => {
+    const [isOpen, setIsOpen] = useState(false);
 
     const actions = [
-        {
-            icon: "far fa-edit",
-            color: "info",
-            onClick: (row) => handleEdit(row.id),
-        },
-        {
-            icon: "far fa-trash-alt",
-            color: "secondary",
-            onClick: (row) => handleDelete(row.id),
-        },
-          {
-            icon: "far fa-eye",
-            color: "secondary",
-            onClick: (row) => handVoirPlus(row),
-        },
-
-          {
-            icon: "fa fa-download",
-            color: "primary",
-            onClick: (row) =>ouvrirModalAvecId(row),
-        },
-
-
-    ];
-    const handVoirPlus = async (item) => {
-        try {
-            const response = await axios.get(`${API_BASE_URL}/notes/${item.id}`); // Récupérer les données par ID
-
-            // Naviguez vers le composant NotePlusScreen avec les données récupérées
-            history.push({
-                pathname: '/note-plus',
-                state: { note: response.data } // Passez les données récupérées ici
-            });
-        } catch (error) {
-            Swal.fire("Erreur", "Erreur lors de la récupération des détails de la note", "error");
+      {
+        label: "Voir",
+        icon: <FaEye />,
+        color: "primary",
+        onClick: () => handleViewNote(note)
+      },
+      {
+        label: "Modifier",
+        icon: <FaEdit />,
+        color: "info",
+        onClick: () => handleEditNote(note)
+      },
+      {
+        label: "Télécharger",
+        icon: <FaDownload />,
+        color: "secondary",
+        onClick: () => {
+          window.open(`${API_BASE_URL}/notes/${note.id}/download`, '_blank');
         }
-    };
-
-    const handleOpenModal = () => {
-
-        setIsModalOpen(true);
-    };
-
-
+      },
+      {
+        label: "Supprimer",
+        icon: <FaTrash />,
+        color: "danger",
+        onClick: () => handleDelete(note.id, note.numero_serie)
+      }
+    ];
 
     return (
-        <div>
-            <Menus />
-            <Head />
+      <div className="dropdown" style={{ position: 'relative' }}>
+        <button
+          className="btn btn-sm btn-outline-secondary"
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          style={{
+            border: 'none',
+            background: 'transparent'
+          }}
+        >
+          <FaEllipsisV />
+        </button>
+        
+        {isOpen && (
+          <>
+            <div 
+              className="position-fixed" 
+              style={{ 
+                top: 0, 
+                left: 0, 
+                right: 0, 
+                bottom: 0, 
+                zIndex: 1040 
+              }} 
+              onClick={() => setIsOpen(false)}
+            />
+            <div 
+              className="dropdown-menu show shadow" 
+              style={{
+                position: 'absolute',
+                right: 0,
+                left: 'auto',
+                zIndex: 1050,
+                minWidth: '180px'
+              }}
+            >
+              {actions.map((action, index) => (
+                <button
+                  key={index}
+                  className={`dropdown-item d-flex align-items-center text-${action.color}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    action.onClick();
+                    setIsOpen(false);
+                  }}
+                >
+                  <span className="mr-2">{action.icon}</span>
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
 
+  const customColumns = [
+    ...columns,
+    {
+      key: "actions",
+      label: "Actions",
+      render: (row) => <ActionDropdown note={row} />
+    }
+  ];
 
+  return (
+    <div>
+      <Menus />
+      <Head />
+      <div className="content-wrapper" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+        <div className="content-header">
+          <div className="container-fluid">
+            <div className="row mb-3">
+              <div className="col-sm-6">
+                <h1 className="m-0 text-dark">
+                  <FaFileAlt className="mr-2" style={{ fontSize: '24px' }} /> Gestion des Notes de Perception
+                </h1>
+                <p className="text-muted mb-0">Gérez les notes de perception</p>
+              </div>
+              <div className="col-sm-6">
+                <ol className="breadcrumb float-sm-right">
+                  <li className="breadcrumb-item"><a href="/">Accueil</a></li>
+                  <li className="breadcrumb-item active">Notes</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
 
-            <div className="content-wrapper" style={{ backgroundColor: "whitesmoke", minHeight: "100vh" }}>
-                <div className="content-header">
-                    <div className="container-fluid">
-                        <h5 className="p-2 mb-3" style={{ backgroundColor: "#343a40", color: "#fff" }}>
-                            <i className="ion-ios-toggle-outline mr-2" /> Gestion des Notes de Perception
-                        </h5>
+        <section className="content">
+          <div className="container-fluid">
+            {/* Cartes de statistiques */}
+            <div className="row mb-4">
+              {statsCards.map((card) => (
+                <div key={card.id} className="col-lg-4 col-md-6 mb-4">
+                  <div className="card border-0 shadow-sm overflow-hidden h-100" style={{ background: card.color }}>
+                    <div className="card-body">
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div>
+                          <div className="text-white-75 small mb-1">{card.title}</div>
+                          <div className="h2 font-weight-bold text-white mb-2">{card.value}</div>
+                          <div className="small text-white-50">{card.description}</div>
+                        </div>
+                        <div className="rounded-circle bg-white bg-opacity-25 p-3 d-flex align-items-center justify-content-center">
+                          {card.icon}
+                        </div>
+                      </div>
                     </div>
+                  </div>
                 </div>
-
-                <section className="content">
-                    <div className="container-fluid">
-                        <div className="row mb-2">
-                            <div className="col-9"></div>
-                            <div className="col-3 d-flex justify-content-end">
-                                <Button
-                                    className={valeurtable ? "btn-info" : "btn-success"}
-                                    onClick={() => {
-                                        handleCancelEdit(); // réinitialise les champs
-                                        setValeurtable(!valeurtable); // puis bascule entre table et formulaire
-                                    }}
-                                    icon={valeurtable ? "ion-plus-circled" : "ion-arrow-left-b"}
-                                >
-                                    {valeurtable ? "Ajouter une Note" : "Retour à la liste des notes"}
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="row">
-                            {valeurtable ? (
-                                <div className="col-md-12">
-                                    <div className="form-inline mb-2">
-                                        <div className="input-group w-50">
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                placeholder="Rechercher une note de perception"
-                                                value={search}
-                                                onChange={(e) => setSearch(e.target.value)}
-                                            />
-                                            <div className="input-group-append">
-                                                <Button onClick={handleSearch} className="btn-secondary" icon="fa fa-search" block={false} />
-                                            </div>
-                                            <div className="input-group-append ml-2">
-                                                <Button onClick={actualiser} className="btn-success" icon="fa fa-sync" block={false} />
-                                            </div>
-
-
-                                        </div>
-                                    </div>
-
-                                    {/* Zone de chargement */}
-                                    {loading ? (
-                                        <div style={{ minHeight: "200px", display: "flex", justifyContent: "center", alignItems: "center" }}>
-                                            <div className="spinner-border text-primary" style={{ width: "3rem", height: "3rem" }} role="status">
-                                                <span className="sr-only">Chargement...</span>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <Table
-                                                columns={columns}
-                                                data={notes}
-                                                actions={actions}
-                                                startIndex={(pagination.current_page - 1) * 20}
-                                                emptyMessage="Aucune note de perception trouvée"
-                                            />
-
-                                            <nav>
-                                                <ul className="pagination">
-                                                    <li className={`page-item ${pagination.current_page === 1 ? "disabled" : ""}`}>
-                                                        <button className="page-link" onClick={() => handlePageChange(pagination.current_page - 1)}>
-                                                            Précédent
-                                                        </button>
-                                                    </li>
-                                                    {Array.from({ length: pagination.last_page }, (_, i) => (
-                                                        <li key={i} className={`page-item ${pagination.current_page === i + 1 ? "active" : ""}`}>
-                                                            <button className="page-link" onClick={() => handlePageChange(i + 1)}>
-                                                                {i + 1}
-                                                            </button>
-                                                        </li>
-                                                    ))}
-                                                    <li className={`page-item ${pagination.current_page === pagination.last_page ? "disabled" : ""}`}>
-                                                        <button className="page-link" onClick={() => handlePageChange(pagination.current_page + 1)}>
-                                                            Suivant
-                                                        </button>
-                                                    </li>
-                                                </ul>
-                                            </nav>
-                                        </>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="col-md-10 offset-md-1">
-                                    <form onSubmit={handleSubmit} className="bg-white p-4 shadow rounded">
-                                        {/* Formulaire */}
-                                        <div className="row">
-                                            {/* id_ministere */}
-                                            <div className="form-group col-md-6 mb-3">
-                                                <label>
-                                                    Ministère <span style={{ color: "red" }}>*</span>
-                                                </label>
-                                                <Droplist
-                                                    name="id_ministere"
-                                                    value={formData.id_ministere}
-                                                    onChange={handleChange}
-                                                    options={directions}
-                                                    placeholder="-- Sélectionnez un ministère --"
-                                                    error={errors.id_ministere && errors.id_ministere[0]}
-                                                />
-                                            </div>
-
-                                            {/* numero_serie */}
-                                            <div className="form-group col-md-6 mb-3">
-                                                <label>
-                                                    Numéro Série <span style={{ color: "red" }}>*</span>
-                                                </label>
-                                                <Input
-                                                    name="numero_serie"
-                                                    placeholder="Numéro Série"
-                                                    value={formData.numero_serie}
-                                                    onChange={handleChange}
-                                                    icon="fas fa-id-card"
-                                                    error={errors.numero_serie && errors.numero_serie[0]}
-                                                />
-                                            </div>
-
-                                            {/* date_ordonnancement */}
-                                            <div className="form-group col-md-6 mb-3">
-                                                <label>
-                                                    Date Ordonnancement <span style={{ color: "red" }}>*</span>
-                                                </label>
-                                                <Input
-                                                    type="date"
-                                                    name="date_ordonnancement"
-                                                    value={formData.date_ordonnancement}
-                                                    onChange={handleChange}
-                                                    error={errors.date_ordonnancement && errors.date_ordonnancement[0]}
-                                                />
-                                            </div>
-
-                                            {/* date_enregistrement */}
-                                            <div className="form-group col-md-6 mb-3">
-                                                <label>
-                                                    Date Enregistrement <span style={{ color: "red" }}>*</span>
-                                                </label>
-                                                <Input
-                                                    type="date"
-                                                    name="date_enregistrement"
-                                                    value={formData.date_enregistrement}
-                                                    onChange={handleChange}
-                                                    error={errors.date_enregistrement && errors.date_enregistrement[0]}
-                                                />
-                                            </div>
-
-                                            {/* id_classeur */}
-                                            <div className="form-group col-md-6 mb-3">
-                                                <label>
-                                                    Classeur <span style={{ color: "red" }}>*</span>
-                                                </label>
-                                                <Droplist
-                                                    name="id_classeur"
-                                                    value={formData.id_classeur}
-                                                    onChange={handleChange}
-                                                    options={classeurs}
-                                                    placeholder="-- Sélectionnez un classeur --"
-                                                    error={errors.id_classeur && errors.id_classeur[0]}
-                                                />
-                                            </div>
-
-                                            {/* id_centre_ordonnancement */}
-                                            <div className="form-group col-md-6 mb-3">
-                                                <label>
-                                                    Centre Ordonnancement <span style={{ color: "red" }}>*</span>
-                                                </label>
-                                                <Droplist
-                                                    name="id_centre_ordonnancement"
-                                                    value={formData.id_centre_ordonnancement}
-                                                    onChange={handleChange}
-                                                    options={centres}
-                                                    placeholder="-- Sélectionnez un centre --"
-                                                    error={errors.id_centre_ordonnancement && errors.id_centre_ordonnancement[0]}
-                                                />
-                                            </div>
-
-                                            {/* id_assujetti */}
-                                            <div className="form-group col-md-6 mb-3">
-                                                <label>
-                                                    Assujetti <span style={{ color: "red" }}>*</span>
-                                                </label>
-                                                <div className="input-group">
-                                                    <input
-                                                        type="text"
-                                                        className="form-control"
-                                                        value={selectedNom ? selectedNom.nom_raison_sociale : ''} 
-                                                     // value={selectedNom.formData.id}
-                                                          
-                                                        disabled
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-secondary ml-2" // Added margin left
-                                                        //onClick={() => setIsModalOpen(true)}
-                                                        onClick={handleOpenModal}
-
-                                                    >
-                                                        Gérer Assujettis
-                                                    </button>
-                                                </div>
-                                                {errors.id_assujetti && (
-                                                    <div className="text-danger">{errors.id_assujetti[0]}</div>
-                                                )}
-                                            </div>
-
-                                            {/* id_emplacement */}
-                                            <div className="form-group col-md-6 mb-3">
-                                                <label>
-                                                    Emplacement <span style={{ color: "red" }}>*</span>
-                                                </label>
-                                                <Droplist
-                                                    name="id_emplacement"
-                                                    value={formData.id_emplacement}
-                                                    onChange={handleChange}
-                                                    options={emplacements}
-                                                    placeholder="-- Sélectionnez un emplacement --"
-                                                    error={errors.id_emplacement && errors.id_emplacement[0]}
-                                                />
-                                            </div>
-
-                                            {/* id_user caché */}
-                                            <input type="hidden" name="id_user" value="1" />
-                                        </div>
-
-                                        {/* Boutons */}
-                                        <div className="row mt-4 justify-content-start">
-                                            {noteEnEdition ? (
-                                                <>
-                                                    <div className="col-3 px-1">
-                                                        <Button type="submit" className="btn-warning py-2 px-4" icon="fas fa-edit">
-                                                            Modifier
-                                                        </Button>
-                                                    </div>
-                                                    <div className="col-3 px-1">
-                                                        <Button
-                                                            type="button"
-                                                            className="btn-secondary py-2 px-4"
-                                                            onClick={() => {
-                                                                handleCancelEdit();
-                                                                setValeurtable(true);
-                                                            }}
-                                                            icon="fas fa-reply"
-                                                        >
-                                                            Annuler
-                                                        </Button>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <div className="col-6 px-1">
-                                                    <Button type="submit" className="btn-primary py-2 px-4" icon="ion-plus">
-                                                        Ajouter
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
-
-                            <ModalAssujetti isOpen={isModalOpen} selectnom={selectnom} onClose={() => setIsModalOpen(false)} />
-                        </div>
-
-                    </div>
-                </section>
-
+              ))}
             </div>
 
-          <ModalNote
-                modalId="documentModal"
-                isOpen={isModalNoteOpen}
-                onClose={() => setIsModalNoteOpen(false)}
-                monid={selectedId} // id personnel
-                projet={monprojet} // id classeur
-                idclasseur={idclasseur}
-                idcentre={idcentre}
-                verification={true}
-            />
+            {/* Barre de recherche et actions */}
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-body">
+                <div className="row">
+                  <div className="col-md-8">
+                    <div className="input-group">
+                      <input
+                        type="text"
+                        className="form-control border-right-0"
+                        placeholder="Rechercher une note (numéro série, assujetti)..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                      />
+                      <div className="input-group-append">
+                        <button 
+                          onClick={handleSearch} 
+                          className="btn btn-primary"
+                          disabled={loading}
+                        >
+                          <FaSearch className="mr-1" /> Rechercher
+                        </button>
+                        <button 
+                          onClick={actualiser} 
+                          className="btn btn-outline-secondary ml-2"
+                          disabled={loading}
+                        >
+                          <FaSync className="mr-1" /> Actualiser
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-4 d-flex justify-content-end">
+                    <button
+                      className="btn btn-primary btn-lg"
+                      onClick={handleAddNote}
+                      disabled={loading}
+                    >
+                      <FaPlus className="mr-2" /> Nouvelle Note
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
+            {/* Tableau des notes */}
+            <div className="row">
+              <div className="col-md-12">
+                {loading ? (
+                  <LoadingSpinner message="Chargement des notes..." />
+                ) : notes.length === 0 ? (
+                  <div className="empty-state bg-white rounded shadow-sm p-5 text-center">
+                    <div className="empty-icon-wrapper bg-light rounded-circle p-4 mx-auto mb-4">
+                      <FaFolder className="text-muted" size={48} />
+                    </div>
+                    <h5 className="text-muted">Aucune note trouvée</h5>
+                    <p className="text-muted mb-0">
+                      {search ? `Aucun résultat pour "${search}"` : "Commencez par ajouter une nouvelle note"}
+                    </p>
+                    {!search && (
+                      <button
+                        className="btn btn-primary mt-3"
+                        onClick={handleAddNote}
+                      >
+                        <FaPlus className="mr-2" /> Ajouter une note
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="card border-0 shadow-sm">
+                      <div className="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h6 className="mb-0 font-weight-bold">Liste des Notes de Perception</h6>
+                        <span className="badge badge-light">
+                          {pagination.total} note{pagination.total > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="card-body p-0">
+                        <Table
+                          columns={customColumns}
+                          data={
+                            role === "admin"
+                              ? notes
+                              : notes.filter(
+                                  (note) => note.id_centre_ordonnancement === id_centre
+                                )
+                          }
+                          startIndex={(pagination.current_page - 1) * pagination.per_page}
+                        />
+                      </div>
+                    </div>
 
-
-
-
-
-        </div>
-    );
+                    {notes.length > 0 && (
+                      <div className="card border-0 shadow-sm mt-3">
+                        <div className="card-body">
+                          <div className="d-flex justify-content-between align-items-center">
+                            <div className="text-muted">
+                              Affichage de {((pagination.current_page - 1) * pagination.per_page) + 1} à {Math.min(pagination.current_page * pagination.per_page, pagination.total)} sur {pagination.total} notes
+                            </div>
+                            <nav>
+                              <ul className="pagination mb-0">
+                                <li className={`page-item ${pagination.current_page === 1 ? "disabled" : ""}`}>
+                                  <button 
+                                    className="page-link border-0" 
+                                    onClick={() => handlePageChange(pagination.current_page - 1)}
+                                    disabled={pagination.current_page === 1}
+                                  >
+                                    Précédent
+                                  </button>
+                                </li>
+                                
+                                {(() => {
+                                  const pages = [];
+                                  const totalPages = pagination.last_page;
+                                  const current = pagination.current_page;
+                                  
+                                  pages.push(
+                                    <li key={1} className={`page-item ${current === 1 ? "active" : ""}`}>
+                                      <button className="page-link border-0" onClick={() => handlePageChange(1)}>
+                                        1
+                                      </button>
+                                    </li>
+                                  );
+                                  
+                                  if (current > 3) {
+                                    pages.push(
+                                      <li key="ellipsis1" className="page-item disabled">
+                                        <span className="page-link border-0">...</span>
+                                      </li>
+                                    );
+                                  }
+                                  
+                                  for (let i = Math.max(2, current - 1); i <= Math.min(totalPages - 1, current + 1); i++) {
+                                    pages.push(
+                                      <li key={i} className={`page-item ${current === i ? "active" : ""}`}>
+                                        <button className="page-link border-0" onClick={() => handlePageChange(i)}>
+                                          {i}
+                                        </button>
+                                      </li>
+                                    );
+                                  }
+                                  
+                                  if (current < totalPages - 2) {
+                                    pages.push(
+                                      <li key="ellipsis2" className="page-item disabled">
+                                        <span className="page-link border-0">...</span>
+                                      </li>
+                                    );
+                                  }
+                                  
+                                  if (totalPages > 1) {
+                                    pages.push(
+                                      <li key={totalPages} className={`page-item ${current === totalPages ? "active" : ""}`}>
+                                        <button className="page-link border-0" onClick={() => handlePageChange(totalPages)}>
+                                          {totalPages}
+                                        </button>
+                                      </li>
+                                    );
+                                  }
+                                  
+                                  return pages;
+                                })()}
+                                
+                                <li className={`page-item ${pagination.current_page === pagination.last_page ? "disabled" : ""}`}>
+                                  <button 
+                                    className="page-link border-0" 
+                                    onClick={() => handlePageChange(pagination.current_page + 1)}
+                                    disabled={pagination.current_page === pagination.last_page}
+                                  >
+                                    Suivant
+                                  </button>
+                                </li>
+                              </ul>
+                            </nav>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
 };
 
 export default NoteperceptionScreen;

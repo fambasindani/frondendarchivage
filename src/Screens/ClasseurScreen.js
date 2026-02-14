@@ -3,24 +3,103 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import Head from "../Composant/Head";
 import Menus from "../Composant/Menus";
-import Button from "../Composant/Button";
-import Input from "../Composant/Input";
-import Table from "../Composant/Table";
 import { API_BASE_URL } from "../config";
 import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
+import ModalClasseurScreen from "../Modals/ModalClasseurScreen";
+import {
+    FaEdit,
+    FaTrash,
+    FaPlus,
+    FaSearch,
+    FaEye,
+    FaEllipsisV,
+    FaChevronLeft,
+    FaChevronRight,
+    FaFolder,
+    FaSync,
+    FaCheckCircle,
+    FaTimesCircle,
+    FaCalendarAlt
+} from 'react-icons/fa';
+import LoadingSpinner from "../Loading/LoadingSpinner";
 
 const ClasseurScreen = () => {
     const [classeurs, setClasseurs] = useState([]);
-    const [nomClasseur, setNomClasseur] = useState("");
-    const [errors, setErrors] = useState({});
     const [search, setSearch] = useState("");
-    const [pagination, setPagination] = useState({ current_page: 1, last_page: 1 });
-    const [classeurEnEdition, setClasseurEnEdition] = useState(null);
+    const [pagination, setPagination] = useState({
+        current_page: 1,
+        last_page: 1,
+        total: 0,
+        per_page: 10
+    });
     const [modeRecherche, setModeRecherche] = useState(false);
-    const [valeurtable, setValeurtable] = useState(true);
     const [loading, setLoading] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [classeurToEdit, setClasseurToEdit] = useState(null);
+
+    const [statsCards, setStatsCards] = useState([
+        {
+            id: 1,
+            title: "Total Classeurs",
+            value: "0",
+            icon: <FaFolder style={{ fontSize: '24px' }} />,
+            color: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            description: "Tous les classeurs"
+        },
+        {
+            id: 2,
+            title: "Actifs",
+            value: "0",
+            icon: <FaCheckCircle style={{ fontSize: '24px' }} />,
+            color: "linear-gradient(135deg, #20c997 0%, #17a2b8 100%)",
+            description: "Classeurs actifs"
+        },
+        {
+            id: 3,
+            title: "Inactifs",
+            value: "0",
+            icon: <FaTimesCircle style={{ fontSize: '24px' }} />,
+            color: "linear-gradient(135deg, #ffc107 0%, #fd7e14 100%)",
+            description: "Classeurs inactifs"
+        }
+    ]);
 
     const token = GetTokenOrRedirect();
+
+    useEffect(() => {
+        if (classeurs.length > 0) {
+            const total = classeurs.length;
+            const actifs = classeurs.filter(c => c.statut === true || c.statut === 1).length;
+            const inactifs = total - actifs;
+
+            setStatsCards([
+                {
+                    id: 1,
+                    title: "Total Classeurs",
+                    value: total.toString(),
+                    icon: <FaFolder style={{ fontSize: '24px' }} />,
+                    color: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    description: "Tous les classeurs"
+                },
+                {
+                    id: 2,
+                    title: "Actifs",
+                    value: actifs.toString(),
+                    icon: <FaCheckCircle style={{ fontSize: '24px' }} />,
+                    color: "linear-gradient(135deg, #20c997 0%, #17a2b8 100%)",
+                    description: `${actifs > 0 ? Math.round((actifs / total) * 100) : 0}% actifs`
+                },
+                {
+                    id: 3,
+                    title: "Inactifs",
+                    value: inactifs.toString(),
+                    icon: <FaTimesCircle style={{ fontSize: '24px' }} />,
+                    color: "linear-gradient(135deg, #ffc107 0%, #fd7e14 100%)",
+                    description: `${inactifs > 0 ? Math.round((inactifs / total) * 100) : 0}% inactifs`
+                }
+            ]);
+        }
+    }, [classeurs]);
 
     useEffect(() => {
         if (token) {
@@ -45,7 +124,12 @@ const ClasseurScreen = () => {
                 });
             }
             setClasseurs(res.data.data);
-            setPagination({ current_page: res.data.current_page, last_page: res.data.last_page });
+            setPagination({
+                current_page: res.data.current_page,
+                last_page: res.data.last_page,
+                total: res.data.total,
+                per_page: res.data.per_page || 10
+            });
         } catch (err) {
             console.error(err);
             Swal.fire("Erreur", "Erreur lors du chargement des classeurs", "error");
@@ -65,66 +149,9 @@ const ClasseurScreen = () => {
         setPagination({ current_page: 1, last_page: 1 });
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setErrors({});
-        if (!token) return;
-
-        try {
-            if (classeurEnEdition) {
-            
-                await axios.put(
-                    `${API_BASE_URL}/classeurs/${classeurEnEdition}`,
-                    { nom_classeur: nomClasseur },
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-                Swal.fire("Succès", "Classeur modifié avec succès", "success");
-            } else {
-                await axios.post(
-                    `${API_BASE_URL}/classeurs`,
-                    { nom_classeur: nomClasseur },
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-                Swal.fire("Succès", "Classeur ajouté avec succès", "success");
-            }
-
-            // Réinitialisation
-           // setNomClasseur("");
-           // setClasseurEnEdition(null);
-           // setValeurtable(true);
-           // setModeRecherche(false);
-           // setSearch("");
-           // setPagination({ current_page: 1, last_page: 1 });
-           // fetchClasseurs();
-
-            setNomClasseur("");
-            setClasseurEnEdition(null);
-            setValeurtable(true);
-            setErrors({});
-            fetchClasseurs(); // gardé
-        } catch (error) {
-            if (error.response?.data?.errors) {
-                setErrors(error.response.data.errors);
-            } else {
-                Swal.fire("Erreur", "Erreur lors de l'enregistrement", "error");
-            }
-        }
-    };
-
-    const handleEdit = async (id) => {
-        if (!token) return;
-
-        try {
-            const res = await axios.get(`${API_BASE_URL}/classeurs/${id}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            setNomClasseur(res.data.nom_classeur);
-            setClasseurEnEdition(id);
-            setValeurtable(false);
-        } catch (err) {
-            console.error(err);
-            Swal.fire("Erreur", "Erreur lors du chargement du classeur", "error");
-        }
+    const handleEdit = (classeur) => {
+        setClasseurToEdit(classeur);
+        setShowModal(true);
     };
 
     const handleDelete = (id) => {
@@ -144,17 +171,10 @@ const ClasseurScreen = () => {
                 axios
                     .delete(
                         `${API_BASE_URL}/classeurs/${id}`,
-                       // { statut: false }, // Met à jour statut à false
                         { headers: { Authorization: `Bearer ${token}` } }
                     )
                     .then(() => {
                         Swal.fire("Désactivé !", "Classeur désactivé avec succès.", "success");
-                        setNomClasseur("");
-                        setClasseurEnEdition(null);
-                        setValeurtable(true);
-                        setModeRecherche(false);
-                        setSearch("");
-                        setPagination({ current_page: 1, last_page: 1 });
                         fetchClasseurs();
                     })
                     .catch((error) => {
@@ -171,171 +191,334 @@ const ClasseurScreen = () => {
         }
     };
 
-    const handleCancelEdit = () => {
-        setNomClasseur("");
-        setClasseurEnEdition(null);
-        setErrors({});
+    const handleModalSuccess = () => {
+        fetchClasseurs();
+        setClasseurToEdit(null);
     };
 
-    const columns = [{ key: "nom_classeur", label: "Nom du Classeur" }];
+    const getStatusBadge = (statut) => {
+        if (statut === true || statut === 1) {
+            return (
+                <span className="badge badge-success d-flex align-items-center px-3 py-1">
+                    <FaCheckCircle className="mr-1" style={{ fontSize: '0.75rem' }} />
+                    Actif
+                </span>
+            );
+        }
+        return (
+            <span className="badge badge-warning d-flex align-items-center px-3 py-1">
+                <FaTimesCircle className="mr-1" style={{ fontSize: '0.75rem' }} />
+                Inactif
+            </span>
+        );
+    };
 
-    const actions = [
-        {
-            icon: "far fa-edit",
-            color: "info",
-            onClick: (row) => handleEdit(row.id),
-        },
-        {
-            icon: "far fa-trash-alt",
-            color: "secondary",
-            onClick: (row) => handleDelete(row.id),
-        },
-    ];
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    const ActionDropdown = ({ row }) => (
+        <div className="dropdown">
+            <button
+                className="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center"
+                type="button"
+                data-toggle="dropdown"
+                style={{ minWidth: '40px' }}
+            >
+                <FaEllipsisV />
+            </button>
+            <div className="dropdown-menu dropdown-menu-right shadow-lg border-0" style={{ minWidth: '200px' }}>
+                <h6 className="dropdown-header text-uppercase text-muted font-weight-bold small">
+                    Actions
+                </h6>
+                <button
+                    className="dropdown-item d-flex align-items-center"
+                    onClick={() => handleEdit(row)}
+                >
+                    <FaEdit className="mr-3 text-primary" />
+                    <span>Modifier</span>
+                </button>
+                <button
+                    className="dropdown-item d-flex align-items-center"
+                    onClick={() => {
+                        Swal.fire({
+                            title: row.nom_classeur,
+                            html: `
+                                <div class="text-left">
+                                    <p><strong>Nom:</strong> ${row.nom_classeur}</p>
+                                    <p><strong>Statut:</strong> ${row.statut === true || row.statut === 1 ? 'Actif' : 'Inactif'}</p>
+                                    <p><strong>Date création:</strong> ${formatDate(row.created_at)}</p>
+                                    <p><strong>Date modification:</strong> ${formatDate(row.updated_at)}</p>
+                                    <p><strong>ID:</strong> ${row.id}</p>
+                                </div>
+                            `,
+                            icon: 'info'
+                        });
+                    }}
+                >
+                    <FaEye className="mr-3 text-info" />
+                    <span>Détails</span>
+                </button>
+                <div className="dropdown-divider"></div>
+                <button
+                    className="dropdown-item d-flex align-items-center text-danger"
+                    onClick={() => handleDelete(row.id)}
+                >
+                    <FaTrash className="mr-3" />
+                    <span>Supprimer</span>
+                </button>
+            </div>
+        </div>
+    );
 
     return (
         <div>
             <Menus />
             <Head />
-            <div className="content-wrapper" style={{ backgroundColor: "whitesmoke", minHeight: "100vh" }}>
+            <div className="content-wrapper" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
                 <div className="content-header">
                     <div className="container-fluid">
-                        <h5 className="p-2 mb-3" style={{ backgroundColor: "#343a40", color: "#fff" }}>
-                            <i className="ion-ios-toggle-outline mr-2" /> Gestion des Classeurs
-                        </h5>
+                        <div className="row mb-3">
+                            <div className="col-sm-6">
+                                <h1 className="m-0 text-dark">
+                                    <FaFolder className="mr-2" style={{ fontSize: '24px' }} /> Gestion des Classeurs
+                                </h1>
+                                <p className="text-muted mb-0">Gérez les classeurs de votre organisation</p>
+                            </div>
+                            <div className="col-sm-6">
+                                <ol className="breadcrumb float-sm-right">
+                                    <li className="breadcrumb-item"><a href="/">Accueil</a></li>
+                                    <li className="breadcrumb-item active">Classeurs</li>
+                                </ol>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <section className="content">
                     <div className="container-fluid">
+                        <div className="row mb-4">
+                            {statsCards.map((card) => (
+                                <div key={card.id} className="col-lg-3 col-md-6 mb-4">
+                                    <div className="card border-0 shadow-sm overflow-hidden h-100" style={{ background: card.color }}>
+                                        <div className="card-body">
+                                            <div className="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <div className="text-white-75 small mb-1">{card.title}</div>
+                                                    <div className="h2 font-weight-bold text-white mb-2">{card.value}</div>
+                                                    <div className="small text-white-50">{card.description}</div>
+                                                </div>
+                                                <div className="rounded-circle bg-white bg-opacity-25 p-3 d-flex align-items-center justify-content-center">
+                                                    {card.icon}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
                         <div className="row mb-2">
-                            <div className="col-9"></div>
-                            <div className="col-3 d-flex justify-content-end">
-                                <Button
-                                    className={valeurtable ? "btn-info" : "btn-success"}
+                            <div className="col-md-9">
+                                <div className="form-inline">
+                                    <div className="input-group">
+                                        <input
+                                            type="text"
+                                            className="form-control border-right-0"
+                                            placeholder="Rechercher un classeur..."
+                                            value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                            style={{ minWidth: '300px' }}
+                                        />
+                                        <div className="input-group-append">
+                                            <button
+                                                onClick={handleSearch}
+                                                className="btn btn-primary"
+                                            >
+                                                <FaSearch className="mr-1" /> Rechercher
+                                            </button>
+                                            <button
+                                                onClick={actualiser}
+                                                className="btn btn-secondary ml-2"
+                                            >
+                                                <FaSync className="mr-1" /> Actualiser
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-md-3 d-flex justify-content-end">
+                                <button
+                                    className="btn btn-primary"
                                     onClick={() => {
-                                        handleCancelEdit();
-                                        setValeurtable(!valeurtable);
+                                        setClasseurToEdit(null);
+                                        setShowModal(true);
                                     }}
-                                    icon={valeurtable ? "ion-plus-circled" : "ion-arrow-left-b"}
                                 >
-                                    {valeurtable ? "Ajouter un Classeur" : "Retour à la liste des classeurs"}
-                                </Button>
+                                    <FaPlus className="mr-1" /> Ajouter un Classeur
+                                </button>
                             </div>
                         </div>
 
                         <div className="row">
-                            {valeurtable ? (
-                                <div className="col-md-12">
-                                    <div className="form-inline mb-2">
-                                        <div className="input-group w-50">
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                placeholder="Rechercher un classeur"
-                                                value={search}
-                                                onChange={(e) => setSearch(e.target.value)}
-                                            />
-                                            <div className="input-group-append">
-                                                <Button onClick={handleSearch} className="btn-secondary" icon="fa fa-search" block={false} />
-                                            </div>
-                                            <div className="input-group-append ml-2">
-                                                <Button onClick={actualiser} className="btn-success" icon="fa fa-sync" block={false} />
-                                            </div>
+                            <div className="col-md-12">
+                                {loading ? (
+                                    <LoadingSpinner message="Chargement des classeurs..." />
+                                ) : classeurs.length === 0 ? (
+                                    <div className="empty-state bg-white rounded shadow-sm p-5 text-center">
+                                        <div className="empty-icon-wrapper bg-light rounded-circle p-4 mx-auto mb-4">
+                                            <FaFolder className="text-muted" size={48} />
                                         </div>
+                                        {/* ... reste du code ... */}
                                     </div>
-
-                                    {loading ? (
-                                        <div style={{ minHeight: "200px", display: "flex", justifyContent: "center", alignItems: "center" }}>
-                                            <div className="spinner-border text-primary" style={{ width: "3rem", height: "3rem" }} role="status">
-                                                <span className="sr-only">Chargement...</span>
+                                ) : (
+                                    <>
+                                        <div className="card border-0 shadow-sm">
+                                            <div className="card-body p-0">
+                                                <div className="table-responsive">
+                                                    <table className="table table-hover mb-0">
+                                                        <thead className="thead-light">
+                                                            <tr>
+                                                                <th className="border-0 py-3" style={{ width: '40px' }}>#</th>
+                                                                <th className="border-0 py-3">Classeur</th>
+                                                                <th className="border-0 py-3 text-center">Statut</th>
+                                                                <th className="border-0 py-3">Date de création</th>
+                                                                <th className="border-0 py-3 text-center" style={{ width: '100px' }}>Actions</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {classeurs.length === 0 ? (
+                                                                <tr>
+                                                                    <td colSpan="5" className="text-center py-5">
+                                                                        <div className="text-muted">
+                                                                            <FaFolder className="mb-3" style={{ fontSize: '3rem', opacity: 0.5 }} />
+                                                                            <h5>Aucun classeur trouvé</h5>
+                                                                            <p className="mb-0">
+                                                                                {modeRecherche
+                                                                                    ? "Aucun résultat pour votre recherche"
+                                                                                    : "Commencez par ajouter un classeur"}
+                                                                            </p>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ) : (
+                                                                classeurs.map((classeur, index) => (
+                                                                    <tr key={classeur.id} className="border-bottom">
+                                                                        <td className="align-middle">
+                                                                            <div className="font-weight-bold text-muted">
+                                                                                {(pagination.current_page - 1) * pagination.per_page + index + 1}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="align-middle">
+                                                                            <div className="d-flex align-items-center">
+                                                                                <div className="rounded-circle bg-primary bg-opacity-10 p-3 mr-3 d-flex align-items-center justify-content-center">
+                                                                                    <FaFolder className="text-primary" style={{ fontSize: '18px' }} />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <div className="font-weight-bold">{classeur.nom_classeur}</div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="align-middle text-center">
+                                                                            {getStatusBadge(classeur.statut)}
+                                                                        </td>
+                                                                        <td className="align-middle">
+                                                                            <div className="d-flex align-items-center">
+                                                                                <FaCalendarAlt className="mr-2 text-muted" />
+                                                                                {formatDate(classeur.created_at)}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="align-middle text-center">
+                                                                            <ActionDropdown row={classeur} />
+                                                                        </td>
+                                                                    </tr>
+                                                                ))
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             </div>
                                         </div>
-                                    ) : (
-                                        <>
-                                            <Table
-                                                columns={columns}
-                                                data={classeurs}
-                                                actions={actions}
-                                                startIndex={(pagination.current_page - 1) * 10}
-                                                emptyMessage="Aucun classeur trouvé"
-                                            />
 
-                                            <nav>
-                                                <ul className="pagination">
-                                                    <li className={`page-item ${pagination.current_page === 1 ? "disabled" : ""}`}>
-                                                        <button className="page-link" onClick={() => handlePageChange(pagination.current_page - 1)}>
-                                                            Précédent
-                                                        </button>
-                                                    </li>
-                                                    {Array.from({ length: pagination.last_page }, (_, i) => (
-                                                        <li key={i} className={`page-item ${pagination.current_page === i + 1 ? "active" : ""}`}>
-                                                            <button className="page-link" onClick={() => handlePageChange(i + 1)}>
-                                                                {i + 1}
-                                                            </button>
-                                                        </li>
-                                                    ))}
-                                                    <li className={`page-item ${pagination.current_page === pagination.last_page ? "disabled" : ""}`}>
-                                                        <button className="page-link" onClick={() => handlePageChange(pagination.current_page + 1)}>
-                                                            Suivant
-                                                        </button>
-                                                    </li>
-                                                </ul>
-                                            </nav>
-                                        </>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="col-md-6 offset-md-3">
-                                    <form onSubmit={handleSubmit} className="bg-white p-3 shadow rounded">
-                                        <label>
-                                            Nom du classeur <span style={{ color: "red" }}>*</span>
-                                        </label>
-                                        <Input
-                                            name="nom_classeur"
-                                            placeholder="Nom du classeur"
-                                            value={nomClasseur}
-                                            onChange={(e) => setNomClasseur(e.target.value)}
-                                            icon="fas fa-folder"
-                                            error={errors.nom_classeur && errors.nom_classeur[0]}
-                                        />
+                                        {classeurs.length > 0 && (
+                                            <div className="card border-0 shadow-sm mt-3">
+                                                <div className="card-body">
+                                                    <div className="d-flex justify-content-between align-items-center">
+                                                        <div className="text-muted">
+                                                            Affichage de {((pagination.current_page - 1) * pagination.per_page) + 1} à {Math.min(pagination.current_page * pagination.per_page, pagination.total)} sur {pagination.total} classeurs
+                                                        </div>
+                                                        <nav>
+                                                            <ul className="pagination mb-0">
+                                                                <li className={`page-item ${pagination.current_page === 1 ? "disabled" : ""}`}>
+                                                                    <button
+                                                                        className="page-link border-0"
+                                                                        onClick={() => handlePageChange(pagination.current_page - 1)}
+                                                                    >
+                                                                        <FaChevronLeft />
+                                                                    </button>
+                                                                </li>
+                                                                {Array.from({ length: Math.min(pagination.last_page, 5) }, (_, i) => {
+                                                                    let pageNum;
+                                                                    if (pagination.last_page <= 5) {
+                                                                        pageNum = i + 1;
+                                                                    } else if (pagination.current_page <= 3) {
+                                                                        pageNum = i + 1;
+                                                                    } else if (pagination.current_page >= pagination.last_page - 2) {
+                                                                        pageNum = pagination.last_page - 4 + i;
+                                                                    } else {
+                                                                        pageNum = pagination.current_page - 2 + i;
+                                                                    }
 
-                                        <div className="row mt-3">
-                                            {classeurEnEdition ? (
-                                                <>
-                                                    <div className="col-6 px-1">
-                                                        <Button type="submit" className="btn-warning w-100 py-2" icon="fas fa-edit">
-                                                            Modifier
-                                                        </Button>
+                                                                    return (
+                                                                        <li key={i} className={`page-item ${pagination.current_page === pageNum ? "active" : ""}`}>
+                                                                            <button
+                                                                                className="page-link border-0"
+                                                                                onClick={() => handlePageChange(pageNum)}
+                                                                            >
+                                                                                {pageNum}
+                                                                            </button>
+                                                                        </li>
+                                                                    );
+                                                                })}
+                                                                <li className={`page-item ${pagination.current_page === pagination.last_page ? "disabled" : ""}`}>
+                                                                    <button
+                                                                        className="page-link border-0"
+                                                                        onClick={() => handlePageChange(pagination.current_page + 1)}
+                                                                    >
+                                                                        <FaChevronRight />
+                                                                    </button>
+                                                                </li>
+                                                            </ul>
+                                                        </nav>
                                                     </div>
-                                                    <div className="col-6 px-1">
-                                                        <Button
-                                                            type="button"
-                                                            className="btn-secondary w-100 py-2"
-                                                            onClick={() => {
-                                                                handleCancelEdit();
-                                                                setValeurtable(true);
-                                                            }}
-                                                            icon="fas fa-reply"
-                                                        >
-                                                            Annuler
-                                                        </Button>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <div className="col-12 px-1">
-                                                    <Button type="submit" className="btn-primary w-100 py-2" icon="ion-plus">
-                                                        Ajouter
-                                                    </Button>
                                                 </div>
-                                            )}
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </section>
             </div>
+
+            <ModalClasseurScreen
+                isOpen={showModal}
+                onClose={() => {
+                    setShowModal(false);
+                    setClasseurToEdit(null);
+                }}
+                classeurToEdit={classeurToEdit}
+                onSuccess={handleModalSuccess}
+            />
         </div>
     );
 };

@@ -37,6 +37,12 @@ const UtilisateurScreen = () => {
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [visible, setvisible] = useState(false);
+
+
+
+
+
   const token = GetTokenOrRedirect();
 
   useEffect(() => {
@@ -126,7 +132,7 @@ const UtilisateurScreen = () => {
         id_note: idNote,
       };
 
-     // alert(idNote)
+      // alert(idNote)
 
       if (utilisateurEnEdition) {
         await axios.put(`${API_BASE_URL}/utilisateurs/${utilisateurEnEdition}`, payload, {
@@ -138,6 +144,7 @@ const UtilisateurScreen = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         Swal.fire("Succès", "Utilisateur ajouté avec succès", "success");
+       // setvisible(true)
       }
 
       resetForm();
@@ -163,7 +170,9 @@ const UtilisateurScreen = () => {
       setIdDirection(res.data.id_direction ?? null);
       setIdNote(res.data.id_note ?? null);
       setUtilisateurEnEdition(id);
+      setPassword("monpassword")
       setIsFormVisible(true);
+      setvisible(false)
     } catch (err) {
       console.error(err);
       Swal.fire("Erreur", "Erreur lors du chargement de l'utilisateur", "error");
@@ -249,9 +258,11 @@ const UtilisateurScreen = () => {
                     if (isFormVisible) {
                       setIsFormVisible(false);
                       resetForm();
+                      setvisible(true)
                     } else {
                       resetForm();
                       setIsFormVisible(true);
+                      setvisible(true)
                     }
                   }}
                   icon={isFormVisible ? "ion-arrow-left-b" : "ion-plus-circled"}
@@ -269,10 +280,12 @@ const UtilisateurScreen = () => {
                       <div className="col-md-6">
                         <label className="mt-3">Nom <span style={{ color: "red" }}>*</span></label>
                         <Input name="nom" placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} error={errors.nom && errors.nom[0]} />
-
-                        <label className="mt-3">Email <span style={{ color: "red" }}>*</span></label>
-                        <Input name="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email && errors.email[0]} />
-
+                        {visible && (
+                          <>
+                            <label className="mt-3">Email <span style={{ color: "red" }}>*</span></label>
+                            <Input name="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email && errors.email[0]} />
+                          </>
+                        )}
                         <label className="mt-3">Rôle <span style={{ color: "red" }}>*</span></label>
                         <Droplist
                           name="role"
@@ -288,9 +301,19 @@ const UtilisateurScreen = () => {
                         <label className="mt-3">Prénom <span style={{ color: "red" }}>*</span></label>
                         <Input name="prenom" placeholder="Prénom" value={prenom} onChange={(e) => setPrenom(e.target.value)} error={errors.prenom && errors.prenom[0]} />
 
-                        <label className="mt-3">Mot de passe <span style={{ color: "red" }}>*</span></label>
-                        <Input type="password" name="password" placeholder="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)} error={errors.password && errors.password[0]} />
-
+                        {visible && (
+                          <>
+                            <label className="mt-3">Mot de passe <span style={{ color: "red" }}>*</span></label>
+                            <Input
+                              type="password"
+                              name="password"
+                              placeholder="Mot de passe"
+                              value={password}
+                              onChange={(e) => setPassword(e.target.value)}
+                              error={errors.password && errors.password[0]}
+                            />
+                          </>
+                        )}
                         <label className="mt-3">Type d'entreprise <span style={{ color: "red" }}>*</span></label>
                         <Droplist
                           name="entreprise"
