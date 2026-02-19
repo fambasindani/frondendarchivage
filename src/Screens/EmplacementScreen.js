@@ -153,36 +153,151 @@ const EmplacementScreen = () => {
         setShowModal(true);
     };
 
-    const handleDelete = (id) => {
-        if (!token) return;
-
+   const handleDelete = (id, nomEmplacement) => {
+    if (!token) {
         Swal.fire({
-            title: "Voulez-vous désactiver cet emplacement ?",
-            text: "Cette action va mettre à jour son statut.",
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#3085d6",
-            cancelButtonColor: "#d33",
-            confirmButtonText: "Oui, désactiver",
-            cancelButtonText: "Annuler",
-        }).then((result) => {
-            if (result.isConfirmed) {
-                axios
-                    .delete(
-                        `${API_BASE_URL}/emplacements/${id}`,
-                        { headers: { Authorization: `Bearer ${token}` } }
-                    )
-                    .then(() => {
-                        Swal.fire("Désactivé !", "Emplacement désactivé avec succès.", "success");
-                        fetchEmplacements();
-                    })
-                    .catch((error) => {
-                        Swal.fire("Erreur", "Erreur lors de la désactivation.", "error");
-                        console.error(error);
-                    });
-            }
+            icon: 'error',
+            title: 'Non authentifié',
+            text: "Vous n'êtes pas authentifié. Veuillez vous reconnecter."
         });
-    };
+        return;
+    }
+
+    // Vérification des permissions
+    const userPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+    
+    if (!userPermissions.includes('supprimer_emplacement')) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Permission refusée',
+            text: "Vous n'avez pas la permission 'supprimer emplacement' pour désactiver un emplacement"
+        });
+        return;
+    }
+
+    Swal.fire({
+        title: "Voulez-vous désactiver cet emplacement ?",
+        html: `
+            <div style="text-align: left;">
+                <p>Êtes-vous sûr de vouloir désactiver l'emplacement :</p>
+                <p style="font-weight: bold; color: #dc3545; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                    "${nomEmplacement || 'Cet emplacement'}"
+                </p>
+                <p class="text-muted small">Cette action va mettre à jour son statut en "inactif".</p>
+            </div>
+        `,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#d33",
+        cancelButtonColor: "#3085d6",
+        confirmButtonText: "Oui, désactiver",
+        cancelButtonText: "Annuler",
+        reverseButtons: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+          //  setDeleting(true); // Si vous avez un état pour le loading
+            
+            axios
+                .delete(
+                    `${API_BASE_URL}/emplacements/${id}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                )
+                .then((response) => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Désactivé !',
+                        text: response.data.message || "Emplacement désactivé avec succès.",
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    
+                    // Rafraîchir la liste
+                    if (fetchEmplacements) {
+                        fetchEmplacements();
+                    }
+                })
+                .catch((error) => {
+                    console.error("Erreur lors de la désactivation:", error);
+                    
+                    if (error.response) {
+                        const { status, data } = error.response;
+                        
+                        // Gestion spécifique selon le code HTTP
+                        switch (status) {
+                            case 403:
+                                // Permission refusée (middleware)
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Action non autorisée',
+                                    text: data.message || "Vous n'avez pas la permission de supprimer cet emplacement",
+                                    timer: 3000
+                                });
+                                break;
+                                
+                            case 401:
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Session expirée',
+                                    text: data.message || 'Votre session a expiré. Veuillez vous reconnecter.',
+                                    timer: 3000
+                                }).then(() => {
+                                    localStorage.clear();
+                                    window.location.href = '/';
+                                });
+                                break;
+                                
+                            case 404:
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Non trouvé',
+                                    text: data.message || "L'emplacement n'existe pas",
+                                    timer: 3000
+                                }).then(() => {
+                                    if (fetchEmplacements) {
+                                        fetchEmplacements();
+                                    }
+                                });
+                                break;
+                                
+                            case 422:
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Erreur de validation',
+                                    text: data.message || "Impossible de désactiver cet emplacement",
+                                    timer: 3000
+                                });
+                                break;
+                                
+                            default:
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Erreur',
+                                    text: data.message || "Erreur lors de la désactivation",
+                                    timer: 3000
+                                });
+                        }
+                    } else if (error.request) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erreur réseau',
+                            text: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
+                            timer: 3000
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erreur',
+                            text: error.message || "Une erreur inattendue s'est produite",
+                            timer: 3000
+                        });
+                    }
+                })
+                .finally(() => {
+                   
+                });
+        }
+    });
+};
 
     const handlePageChange = (page) => {
         if (page >= 1 && page <= pagination.last_page) {

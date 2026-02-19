@@ -24,48 +24,180 @@ const ModalClasseurScreen = ({ isOpen, onClose, classeurToEdit = null, onSuccess
     setErrors({});
   }, [classeurToEdit]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrors({});
-    if (!token) return;
 
-    setLoading(true);
 
-    try {
-      if (isEditing && classeurToEdit) {
-        await axios.put(
-          `${API_BASE_URL}/classeurs/${classeurToEdit.id}`,
-          { nom_classeur: nomClasseur },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        Swal.fire("Succès", "Classeur modifié avec succès", "success");
-      } else {
-        await axios.post(
-          `${API_BASE_URL}/classeurs`,
-          { nom_classeur: nomClasseur },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        Swal.fire("Succès", "Classeur ajouté avec succès", "success");
-      }
 
-      setNomClasseur("");
-      setIsEditing(false);
-      
-      if (onSuccess) {
-        onSuccess();
-      }
-      
-      onClose();
-    } catch (error) {
-      if (error.response?.data?.errors) {
-        setErrors(error.response.data.errors);
-      } else {
-        Swal.fire("Erreur", "Erreur lors de l'enregistrement", "error");
-      }
-    } finally {
-      setLoading(false);
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setErrors({});
+  
+  // Vérification du token
+  if (!token) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Non authentifié',
+      text: "Vous n'êtes pas authentifié. Veuillez vous reconnecter.",
+      timer: 3000,
+      timerProgressBar: true
+    });
+    return;
+  }
+
+  // Récupérer les permissions de l'utilisateur
+  const userPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+  
+  // Vérification des permissions selon l'action
+  if (isEditing && classeurToEdit) {
+    if (!userPermissions.includes('modifier_classeur')) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Accès refusé',
+        text: "Vous n'avez pas la permission 'modifier_classeur' pour modifier un classeur",
+        timer: 3000,
+        timerProgressBar: true
+      });
+      return;
     }
-  };
+  } else {
+    if (!userPermissions.includes('creer_classeur')) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Accès refusé',
+        text: "Vous n'avez pas la permission 'creer_classeur' pour ajouter un classeur",
+        timer: 3000,
+        timerProgressBar: true
+      });
+      return;
+    }
+  }
+
+  setLoading(true);
+
+  try {
+    if (isEditing && classeurToEdit) {
+      // Route: PUT /classeurs/{id} avec middleware permission:modifier_classeur
+      await axios.put(
+        `${API_BASE_URL}/classeurs/${classeurToEdit.id}`,
+        { nom_classeur: nomClasseur },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Succès',
+        text: 'Classeur modifié avec succès',
+        timer: 2000,
+        timerProgressBar: true
+      });
+      
+    } else {
+      // Route: POST /classeurs avec middleware permission:creer_classeur
+      await axios.post(
+        `${API_BASE_URL}/classeurs`,
+        { nom_classeur: nomClasseur },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Succès',
+        text: 'Classeur ajouté avec succès',
+        timer: 2000,
+        timerProgressBar: true
+      });
+    }
+
+    // Réinitialisation
+    setNomClasseur("");
+    setIsEditing(false);
+    
+    if (onSuccess) {
+      onSuccess();
+    }
+    
+    onClose();
+    
+  } catch (error) {
+    console.error('Erreur:', error);
+    
+    // Gestion des erreurs
+    if (error.response) {
+      const { status, data } = error.response;
+      
+      // Erreur 403 - Permission denied (renvoyée par votre middleware)
+      if (status === 403) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Permission refusée',
+          text: data.message || "Vous n'avez pas la permission d'effectuer cette action",
+          timer: 3000,
+          timerProgressBar: true
+        });
+      }
+      // Erreur 422 - Validation errors
+      else if (status === 422 && data.errors) {
+        setErrors(data.errors);
+        
+        // Afficher la première erreur de validation
+        const firstError = Object.values(data.errors)[0]?.[0];
+        if (firstError) {
+          Swal.fire({
+            icon: 'warning',
+            title: 'Erreur de validation',
+            text: firstError,
+            timer: 3000,
+            timerProgressBar: true
+          });
+        }
+      }
+      // Erreur 401 - Non authentifié
+      else if (status === 401) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Session expirée',
+          text: 'Votre session a expiré. Veuillez vous reconnecter.',
+          timer: 3000,
+          timerProgressBar: true
+        });
+        
+        // Redirection vers login après 3 secondes
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 3000);
+      }
+      // Autres erreurs
+      else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Erreur',
+          text: data.message || "Erreur lors de l'enregistrement",
+          timer: 3000,
+          timerProgressBar: true
+        });
+      }
+    } else if (error.request) {
+      // Pas de réponse du serveur
+      Swal.fire({
+        icon: 'error',
+        title: 'Erreur réseau',
+        text: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
+        timer: 3000,
+        timerProgressBar: true
+      });
+    } else {
+      // Autre erreur
+      Swal.fire({
+        icon: 'error',
+        title: 'Erreur',
+        text: error.message || "Une erreur inattendue s'est produite",
+        timer: 3000,
+        timerProgressBar: true
+      });
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleCancel = () => {
     setNomClasseur("");

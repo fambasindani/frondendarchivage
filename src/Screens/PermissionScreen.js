@@ -51,7 +51,7 @@ const Permissions = () => {
       fetchPermissions();
       fetchRoles();
     }
-  }, [token, currentPage]);
+  }, [token, currentPage, search]);
 
   const fetchPermissions = async () => {
     setLoading(true);
@@ -68,17 +68,14 @@ const Permissions = () => {
       if (response.data && response.data.success) {
         const apiData = response.data.data;
         
-        if (apiData && apiData.data) {
-          setPermissions(apiData.data || []);
-          setPagination({
-            current_page: apiData.current_page || 1,
-            last_page: apiData.last_page || 1,
-            per_page: apiData.per_page || 10,
-            total: apiData.total || 0
-          });
-        } else {
-          setPermissions(apiData || []);
-        }
+        // Correction: La structure est {current_page, data, last_page, total, ...}
+        setPermissions(apiData.data || []);
+        setPagination({
+          current_page: apiData.current_page || 1,
+          last_page: apiData.last_page || 1,
+          per_page: apiData.per_page || itemsPerPage,
+          total: apiData.total || 0
+        });
       }
     } catch (error) {
       console.error('Erreur chargement permissions:', error);
@@ -120,10 +117,8 @@ const Permissions = () => {
         });
         
         if (response.data.success) {
-          // Mettre à jour la liste
-          setPermissions(prev => prev.map(p => 
-            p.id === editingPermission.id ? response.data.data : p
-          ));
+          // Rafraîchir la liste
+          fetchPermissions();
           
           Swal.fire({
             icon: 'success',
@@ -140,8 +135,8 @@ const Permissions = () => {
         });
         
         if (response.data.success) {
-          // Ajouter à la liste
-          setPermissions(prev => [...prev, response.data.data]);
+          // Rafraîchir la liste
+          fetchPermissions();
           
           Swal.fire({
             icon: 'success',
@@ -241,8 +236,8 @@ const Permissions = () => {
             headers: { Authorization: `Bearer ${token}` }
           });
           
-          // Supprimer de la liste
-          setPermissions(prev => prev.filter(p => p.id !== id));
+          // Rafraîchir la liste
+          fetchPermissions();
           
           Swal.fire({
             icon: 'success',
@@ -294,19 +289,13 @@ const Permissions = () => {
   };
 
   const getRolesUsingPermission = (permissionId) => {
-    // Cette fonction nécessite que les rôles aient leur propriété permissions
-    return roles.filter(role => {
-      if (!role.permissions) return false;
-      
-      // Vérifier si role.permissions est un tableau d'objets ou d'IDs
-      if (Array.isArray(role.permissions)) {
-        return role.permissions.some(p => {
-          if (typeof p === 'object') return p.id === permissionId;
-          return p === permissionId;
-        });
-      }
-      return false;
-    });
+    // Utiliser roles_count de l'API
+    const permission = permissions.find(p => p.id === permissionId);
+    if (permission && permission.roles_count > 0) {
+      // Si vous avez besoin des détails des rôles, vous devrez peut-être les récupérer séparément
+      return [];
+    }
+    return [];
   };
 
   const toggleActionDropdown = (id, e) => {
@@ -326,26 +315,30 @@ const Permissions = () => {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Filtrage local pour l'affichage
-  const filteredPermissions = permissions.filter(permission =>
-    search === '' ||
-    (permission.code && permission.code.toLowerCase().includes(search.toLowerCase())) ||
-    (permission.description && permission.description.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const totalPages = Math.ceil(filteredPermissions.length / itemsPerPage);
-  const paginatedPermissions = filteredPermissions.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
   const renderPagination = () => {
     if (pagination.last_page <= 1) return null;
 
+    // Générer les pages à afficher
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, pagination.current_page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(pagination.last_page, startPage + maxVisible - 1);
+
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+
     return (
-      <div className="d-flex justify-content-center mt-4">
+      <div className="d-flex justify-content-between align-items-center mt-4">
+        <div className="text-muted small">
+          Affichage de {((pagination.current_page - 1) * pagination.per_page) + 1} à {Math.min(pagination.current_page * pagination.per_page, pagination.total)} sur {pagination.total} permissions
+        </div>
         <nav>
-          <ul className="pagination">
+          <ul className="pagination mb-0">
             <li className={`page-item ${pagination.current_page === 1 ? 'disabled' : ''}`}>
               <button 
                 className="page-link"
@@ -356,27 +349,47 @@ const Permissions = () => {
               </button>
             </li>
             
-            {[...Array(pagination.last_page)].map((_, i) => {
-              const pageNum = i + 1;
-              const isCurrent = pageNum === pagination.current_page;
-              
-              if (pageNum === 1 || pageNum === pagination.last_page || 
-                  (pageNum >= pagination.current_page - 1 && pageNum <= pagination.current_page + 1)) {
-                return (
-                  <li key={pageNum} className={`page-item ${isCurrent ? 'active' : ''}`}>
-                    <button 
-                      className="page-link"
-                      onClick={() => setCurrentPage(pageNum)}
-                    >
-                      {pageNum}
-                    </button>
+            {startPage > 1 && (
+              <>
+                <li className="page-item">
+                  <button className="page-link" onClick={() => setCurrentPage(1)}>1</button>
+                </li>
+                {startPage > 2 && (
+                  <li className="page-item disabled">
+                    <span className="page-link">...</span>
                   </li>
-                );
-              } else if (pageNum === pagination.current_page - 2 || pageNum === pagination.current_page + 2) {
-                return <li key={pageNum} className="page-item disabled"><span className="page-link">...</span></li>;
-              }
-              return null;
-            })}
+                )}
+              </>
+            )}
+            
+            {pages.map(pageNum => (
+              <li key={pageNum} className={`page-item ${pagination.current_page === pageNum ? 'active' : ''}`}>
+                <button 
+                  className="page-link"
+                  onClick={() => setCurrentPage(pageNum)}
+                >
+                  {pageNum}
+                </button>
+              </li>
+            ))}
+            
+            {endPage < pagination.last_page && (
+              <>
+                {endPage < pagination.last_page - 1 && (
+                  <li className="page-item disabled">
+                    <span className="page-link">...</span>
+                  </li>
+                )}
+                <li className="page-item">
+                  <button 
+                    className="page-link" 
+                    onClick={() => setCurrentPage(pagination.last_page)}
+                  >
+                    {pagination.last_page}
+                  </button>
+                </li>
+              </>
+            )}
             
             <li className={`page-item ${pagination.current_page === pagination.last_page ? 'disabled' : ''}`}>
               <button 
@@ -519,7 +532,7 @@ const Permissions = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedPermissions.length === 0 ? (
+                    {permissions.length === 0 ? (
                       <tr>
                         <td colSpan="5" className="text-center py-5">
                           <div className="d-flex flex-column align-items-center">
@@ -544,13 +557,11 @@ const Permissions = () => {
                         </td>
                       </tr>
                     ) : (
-                      paginatedPermissions.map((permission, index) => {
-                        const associatedRoles = getRolesUsingPermission(permission.id);
-                        
+                      permissions.map((permission, index) => {
                         return (
                           <tr key={permission.id} className="hover-row">
                             <td>
-                              {(currentPage - 1) * itemsPerPage + index + 1}
+                              {((pagination.current_page - 1) * pagination.per_page) + index + 1}
                             </td>
                             <td>
                               <div className="d-flex align-items-center">
@@ -563,9 +574,6 @@ const Permissions = () => {
                                   <div className="font-weight-bold text-dark">
                                     {permission.code}
                                   </div>
-                                {/*   <small className="text-muted">
-                                    ID: {permission.id}
-                                  </small> */}
                                 </div>
                               </div>
                             </td>
@@ -578,28 +586,16 @@ const Permissions = () => {
                             </td>
                             <td>
                               <div className="d-flex flex-wrap gap-1">
-                                {associatedRoles.length > 0 ? (
+                                {permission.roles_count > 0 ? (
                                   <>
-                                    {associatedRoles.slice(0, 3).map(role => (
-                                      <span key={role.id} className="badge badge-info">
-                                        {role.nom}
-                                      </span>
-                                    ))}
-                                    {associatedRoles.length > 3 && (
-                                      <span className="badge badge-light">
-                                        +{associatedRoles.length - 3}
-                                      </span>
-                                    )}
+                                    <span className="badge badge-info">
+                                      {permission.roles_count} rôle(s)
+                                    </span>
                                   </>
                                 ) : (
                                   <span className="text-muted small">Aucun rôle</span>
                                 )}
                               </div>
-                              {associatedRoles.length > 0 && (
-                                <small className="text-muted d-block mt-1">
-                                  {associatedRoles.length} rôle(s)
-                                </small>
-                              )}
                             </td>
                             <td className="text-center">
                               <div className="dropdown">
@@ -798,6 +794,51 @@ const Permissions = () => {
         
         .modal-backdrop {
           background-color: rgba(0,0,0,0.5) !important;
+        }
+        
+        .bg-gradient-primary {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .modal-content {
+          border-radius: 16px;
+          overflow: hidden;
+        }
+        
+        .modal-header {
+          border-radius: 0;
+        }
+        
+        .close {
+          opacity: 0.8;
+          transition: opacity 0.2s;
+        }
+        
+        .close:hover {
+          opacity: 1;
+        }
+        
+        .pagination {
+          gap: 5px;
+        }
+        
+        .page-link {
+          border-radius: 8px;
+          color: #007bff;
+          border: 1px solid #dee2e6;
+          padding: 0.5rem 0.75rem;
+        }
+        
+        .page-item.active .page-link {
+          background: #007bff;
+          border-color: #007bff;
+          color: white;
+        }
+        
+        .page-item.disabled .page-link {
+          color: #6c757d;
+          pointer-events: none;
+          background: #f8f9fa;
         }
       `}</style>
     </div>

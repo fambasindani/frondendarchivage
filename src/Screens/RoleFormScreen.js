@@ -8,7 +8,10 @@ import {
   FaSave,
   FaSpinner,
   FaExclamationCircle,
-  FaUserShield
+  FaUserShield,
+  FaSearch,
+  FaChevronLeft,
+  FaChevronRight
 } from 'react-icons/fa';
 import { Link, useParams, useHistory } from 'react-router-dom';
 import GetTokenOrRedirect from '../Composant/getTokenOrRedirect';
@@ -16,15 +19,22 @@ import { API_BASE_URL } from '../config';
 
 const RoleForm = () => {
   const { id } = useParams();
-  //const { id } = props.match.params;
-
-
   const history = useHistory();
 
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
+  
+  // États pour la pagination
+  const [pagination, setPagination] = useState({
+    current_page: 1,
+    last_page: 1,
+    total: 0,
+    per_page: 10
+  });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
 
   const token = GetTokenOrRedirect();
 
@@ -35,79 +45,141 @@ const RoleForm = () => {
   });
 
   /**
-   * 🔹 Chargement initial propre (permissions + rôle si édition)
+   * 🔹 Charger les permissions avec pagination
    */
-  useEffect(() => {
-    
-    
-    if (!token) return;
-    initializeData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
-
-  const initializeData = async () => {
+  const fetchPermissions = async (page = 1, search = '') => {
     try {
-      setLoading(true);
+      const params = {
+        page: page,
+        per_page: pagination.per_page
+      };
+      
+      if (search) {
+        params.search = search;
+      }
 
-      // 🔹 Charger toutes les permissions
-      const permsResponse = await axios.get(`${API_BASE_URL}/permissions`, {
+      const response = await axios.get(`${API_BASE_URL}/permissions`, {
         headers: { Authorization: `Bearer ${token}` },
-        params: { all: true }
+        params: params
       });
-      const perms = permsResponse?.data?.data?.data || [];
-      setPermissions(perms);
 
-      // 🔹 Charger rôle en mode édition
-      if (id) {
-        try {
-          const roleResponse = await axios.get(`${API_BASE_URL}/roles/${id}/with-details`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const role = roleResponse?.data?.data;
-
-          if (!role || !role.id) {
-            Swal.fire({
-              icon: 'error',
-              title: 'Rôle non trouvé',
-              text: 'Ce rôle n’existe pas ou a été supprimé.'
-            });
-            history.push('/gestion-utilisateurs/roles');
-            return;
-          }
-
-          const permissionIds = Array.isArray(role.permissions)
-            ? role.permissions.filter(p => p && p.id).map(p => p.id)
-            : [];
-
-          setFormData({
-            nom: role.nom || '',
-            description: role.description || '',
-            permissions: permissionIds
-          });
-        } catch (err) {
-          console.error('❌ Erreur chargement rôle:', err);
-          Swal.fire({
-            icon: 'error',
-            title: 'Erreur',
-            text: 'Impossible de charger ce rôle'
-          });
-          history.push('/gestion-utilisateurs/roles');
-        }
+      console.log("Réponse permissions:", response.data);
+      
+      // Adapter selon la structure de votre API
+      if (response.data?.success && response.data?.data) {
+        setPermissions(response.data.data.data || []);
+        setPagination({
+          current_page: response.data.data.current_page || page,
+          last_page: response.data.data.last_page || 1,
+          total: response.data.data.total || 0,
+          per_page: response.data.data.per_page || 10
+        });
       }
     } catch (error) {
-      console.error('❌ Erreur d\'initialisation:', error);
+      console.error('❌ Erreur chargement permissions:', error);
       Swal.fire({
         icon: 'error',
         title: 'Erreur',
-        text: 'Impossible de charger les données initiales'
+        text: 'Impossible de charger les permissions'
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   /**
-   * 🔹 Soumission formulaire (create / update)
+   * 🔹 Charger le rôle en mode édition
+   */
+  const fetchRole = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/roles/${id}/with-details`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const role = response?.data?.data;
+
+      if (!role || !role.id) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Rôle non trouvé',
+          text: 'Ce rôle n’existe pas ou a été supprimé.'
+        });
+        history.push('/gestion-utilisateurs/roles');
+        return;
+      }
+
+      const permissionIds = Array.isArray(role.permissions)
+        ? role.permissions.filter(p => p && p.id).map(p => p.id)
+        : [];
+
+      setFormData({
+        nom: role.nom || '',
+        description: role.description || '',
+        permissions: permissionIds
+      });
+    } catch (err) {
+      console.error('❌ Erreur chargement rôle:', err);
+      Swal.fire({
+        icon: 'error',
+        title: 'Erreur',
+        text: 'Impossible de charger ce rôle'
+      });
+      history.push('/gestion-utilisateurs/roles');
+    }
+  };
+
+  /**
+   * 🔹 Chargement initial
+   */
+  useEffect(() => {
+    if (!token) return;
+    
+    const initializeData = async () => {
+      setLoading(true);
+      try {
+        // Charger les permissions avec pagination
+        await fetchPermissions(1, '');
+        
+        // Charger le rôle si en mode édition
+        if (id) {
+          await fetchRole();
+        }
+      } catch (error) {
+        console.error('❌ Erreur d\'initialisation:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeData();
+  }, [token, id]);
+
+  /**
+   * 🔹 Recharger les permissions quand la page ou la recherche change
+   */
+  useEffect(() => {
+    if (token && !loading) {
+      fetchPermissions(pagination.current_page, searchTerm);
+    }
+  }, [pagination.current_page, searchTerm]);
+
+  /**
+   * 🔹 Gestionnaire de recherche
+   */
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setSearchTerm(searchInput);
+    setPagination(prev => ({ ...prev, current_page: 1 }));
+  };
+
+  /**
+   * 🔹 Changement de page
+   */
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.last_page) {
+      setPagination(prev => ({ ...prev, current_page: newPage }));
+    }
+  };
+
+  /**
+   * 🔹 Soumission formulaire
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -216,75 +288,31 @@ const RoleForm = () => {
     );
   };
 
-  /** 🔹 Catégories permissions */
-  const getCategories = () => {
-    const categories = new Set();
-    permissions.forEach((perm) => {
-      if (perm?.code) categories.add(perm.code.split('_')[0]);
+  /** 🔹 Grouper les permissions par catégorie */
+  const groupPermissionsByCategory = () => {
+    const grouped = {};
+    
+    permissions.forEach(perm => {
+      if (!perm?.code) return;
+      
+      const category = perm.code.split('_')[0] || 'Autres';
+      if (!grouped[category]) {
+        grouped[category] = [];
+      }
+      grouped[category].push(perm);
     });
-    return Array.from(categories);
+    
+    return grouped;
   };
 
-  const PermissionCategory = ({ category }) => {
-    const categoryPermissions = permissions.filter(
-      (perm) => perm?.code?.toLowerCase().startsWith(category.toLowerCase())
-    );
-
-    if (categoryPermissions.length === 0) return null;
-
-    return (
-      <div className="permission-category mb-4">
-        <h6 className="font-weight-bold text-uppercase text-muted mb-3">
-          <FaKey className="mr-2" />
-          {category.replace('_', ' ').toUpperCase()}
-        </h6>
-
-        <div className="row">
-          {categoryPermissions.map((permission) => (
-            <div key={permission.id} className="col-md-6 mb-3">
-              <div
-                className={`permission-item-card ${formData.permissions.includes(permission.id) ? 'selected' : ''
-                  }`}
-              >
-                <div className="d-flex align-items-start">
-                  <div className="mr-3 mt-1">
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      checked={formData.permissions.includes(permission.id)}
-                      onChange={(e) => {
-                        const newPermissions = e.target.checked
-                          ? [...formData.permissions, permission.id]
-                          : formData.permissions.filter((pid) => pid !== permission.id);
-                        setFormData({ ...formData, permissions: newPermissions });
-                      }}
-                      disabled={submitting || id === '1'}
-                    />
-                  </div>
-
-                  <div className="flex-grow-1">
-                    <label className="font-weight-bold mb-1 d-block cursor-pointer">
-                      {permission.code}
-                    </label>
-                    <p className="text-muted small mb-0">
-                      {permission.description || 'Aucune description'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  const groupedPermissions = groupPermissionsByCategory();
 
   if (loading) {
     return (
       <div className="role-form-page">
         <div className="text-center py-5">
           <FaSpinner className="fa-spin mb-3" size={32} />
-          <p>Chargement du rôle...</p>
+          <p>Chargement du formulaire...</p>
         </div>
       </div>
     );
@@ -364,17 +392,153 @@ const RoleForm = () => {
                     </span>
                   </div>
 
+                  {/* Barre de recherche */}
+                  <form onSubmit={handleSearch} className="mb-4">
+                    <div className="input-group">
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Rechercher une permission..."
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                      />
+                      <div className="input-group-append">
+                        <button
+                          type="submit"
+                          className="btn btn-outline-primary"
+                          disabled={loading}
+                        >
+                          <FaSearch />
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  {/* Liste des permissions groupées */}
                   <div className="permissions-container">
-                    {permissions.length > 0 ? (
-                      getCategories().map((category) => (
-                        <PermissionCategory key={category} category={category} />
+                    {Object.keys(groupedPermissions).length > 0 ? (
+                      Object.entries(groupedPermissions).map(([category, perms]) => (
+                        <div key={category} className="permission-category mb-4">
+                          <h6 className="font-weight-bold text-uppercase text-muted mb-3">
+                            <FaKey className="mr-2" />
+                            {category.replace(/_/g, ' ').toUpperCase()}
+                          </h6>
+
+                          <div className="row">
+                            {perms.map((permission) => (
+                              <div key={permission.id} className="col-md-6 mb-3">
+                                <div
+                                  className={`permission-item-card p-3 border rounded ${formData.permissions.includes(permission.id) ? 'border-primary bg-light' : ''
+                                    }`}
+                                >
+                                  <div className="d-flex align-items-start">
+                                    <div className="mr-3 mt-1">
+                                      <input
+                                        type="checkbox"
+                                        className="form-check-input"
+                                        checked={formData.permissions.includes(permission.id)}
+                                        onChange={(e) => {
+                                          const newPermissions = e.target.checked
+                                            ? [...formData.permissions, permission.id]
+                                            : formData.permissions.filter((pid) => pid !== permission.id);
+                                          setFormData({ ...formData, permissions: newPermissions });
+                                        }}
+                                        disabled={submitting || id === '1'}
+                                      />
+                                    </div>
+
+                                    <div className="flex-grow-1">
+                                      <label className="font-weight-bold mb-1 d-block cursor-pointer">
+                                        {permission.code}
+                                      </label>
+                                      <p className="text-muted small mb-0">
+                                        {permission.description || 'Aucune description'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       ))
                     ) : (
                       <div className="alert alert-info">
-                        <FaInfoCircle className="mr-2" /> Aucune permission disponible.
+                        <FaInfoCircle className="mr-2" /> Aucune permission trouvée.
                       </div>
                     )}
                   </div>
+
+                  {/* Pagination */}
+                  {pagination.last_page > 1 && (
+                    <div className="d-flex justify-content-between align-items-center mt-4">
+                      <div className="text-muted">
+                        Page {pagination.current_page} sur {pagination.last_page}
+                        {' '}({pagination.total} permission(s) au total)
+                      </div>
+                      <nav>
+                        <ul className="pagination mb-0">
+                          <li className={`page-item ${pagination.current_page === 1 ? 'disabled' : ''}`}>
+                            <button
+                            type="button" 
+                              className="page-link"
+                              onClick={() => handlePageChange(pagination.current_page - 1)}
+                              disabled={pagination.current_page === 1}
+                            >
+                              <FaChevronLeft /> Précédent
+                            </button>
+                          </li>
+                          
+                          {[...Array(pagination.last_page)].map((_, i) => {
+                            const pageNum = i + 1;
+                            // Afficher max 5 pages autour de la page courante
+                            if (
+                              pageNum === 1 ||
+                              pageNum === pagination.last_page ||
+                              (pageNum >= pagination.current_page - 2 && 
+                               pageNum <= pagination.current_page + 2)
+                            ) {
+                              return (
+                                <li
+                                  key={pageNum}
+                                  className={`page-item ${pagination.current_page === pageNum ? 'active' : ''}`}
+                                >
+                                  <button 
+                                  type="button" 
+                                    className="page-link"
+                                    onClick={() => handlePageChange(pageNum)}
+                                  >
+                                    {pageNum}
+                                  </button>
+                                </li>
+                              );
+                            } else if (
+                              pageNum === pagination.current_page - 3 ||
+                              pageNum === pagination.current_page + 3
+                            ) {
+                              return (
+                                <li key={`ellipsis-${pageNum}`} className="page-item disabled">
+                                  <span className="page-link">...</span>
+                                </li>
+                              );
+                            }
+                            return null;
+                          })}
+                          
+                          <li className={`page-item ${pagination.current_page === pagination.last_page ? 'disabled' : ''}`}>
+                            <button
+                            type="button" 
+                              className="page-link"
+                              onClick={() => handlePageChange(pagination.current_page + 1)}
+                              disabled={pagination.current_page === pagination.last_page}
+                            >
+                              Suivant <FaChevronRight />
+                            </button>
+                          </li>
+                        </ul>
+                      </nav>
+                    </div>
+                  )}
                 </div>
 
                 <div className="d-flex justify-content-end border-top pt-4">
@@ -423,14 +587,17 @@ const RoleForm = () => {
                   <h6 className="text-muted mb-2">Permissions sélectionnées</h6>
 
                   {formData.permissions.length > 0 ? (
-                    formData.permissions.slice(0, 5).map((permId) => {
-                      const perm = permissions.find((p) => p.id === permId);
-                      return perm ? (
-                        <div key={perm.id} className="mb-2">
-                          <span className="badge badge-info">{perm.code}</span>
-                        </div>
-                      ) : null;
-                    })
+                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                      {formData.permissions.map((permId) => {
+                        // Chercher dans toutes les permissions chargées
+                        const perm = permissions.find((p) => p.id === permId);
+                        return perm ? (
+                          <div key={perm.id} className="mb-2">
+                            <span className="badge badge-info">{perm.code}</span>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
                   ) : (
                     <p className="text-muted mb-0">Aucune permission sélectionnée</p>
                   )}

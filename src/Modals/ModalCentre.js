@@ -1,206 +1,232 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import Swal from "sweetalert2";
-import { API_BASE_URL } from "../config";
-import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
-import { 
-  FaCloudUploadAlt, 
-  FaQrcode, 
-  FaEye, 
-  FaTrashAlt, 
-  FaFilePdf, 
-  FaTimes,
-  FaFileAlt,
-  FaDownload,
-  FaSpinner
-} from "react-icons/fa";
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import Swal from 'sweetalert2';
+import { API_BASE_URL } from '../config';
+import GetTokenOrRedirect from '../Composant/getTokenOrRedirect';
+import { FaPlus, FaEdit, FaTimes, FaBuilding, FaAlignLeft, FaFolder } from 'react-icons/fa';
 
-const DocumentModal = ({ modalId, isOpen, onClose, monid, projet, idclasseur, verification }) => {
-  const [fichiers, setFichiers] = useState([]);
-  const [documents, setDocuments] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [scanning, setScanning] = useState(false);
+const ModalCentre = ({ isOpen, onClose, centreToEdit = null, ministeres = [], onSuccess }) => {
+  const [nom, setNom] = useState("");
+  const [description, setDescription] = useState("");
+  const [ministereId, setMinistereId] = useState("");
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const token = GetTokenOrRedirect();
 
+  // Initialiser les données si on édite un centre
   useEffect(() => {
-    const modal = window.$(`#${modalId}`);
-    if (isOpen) {
-      modal.modal("show");
-      fetchDocuments();
+    if (centreToEdit) {
+      setNom(centreToEdit.nom || "");
+      setDescription(centreToEdit.description || "");
+      setMinistereId(String(centreToEdit.id_ministere || ""));
+      setIsEditing(true);
     } else {
-      modal.modal("hide");
+      setNom("");
+      setDescription("");
+      setMinistereId("");
+      setIsEditing(false);
     }
+    setErrors({});
+  }, [centreToEdit]);
 
-    modal.on("hidden.bs.modal", onClose);
-    return () => modal.off("hidden.bs.modal", onClose);
-  }, [isOpen]);
-
-  const fetchDocuments = async () => {
-    if (!monid) return;
-    setLoading(true);
-    try {
-      const res = await axios.get(`${API_BASE_URL}/documents/${monid}`);
-      setDocuments(res.data);
-    } catch (error) {
-      console.error("Erreur chargement documents", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const selectedFiles = Array.from(e.target.files);
-    const pdfOnly = selectedFiles.every(file => file.type === "application/pdf");
-
-    if (!pdfOnly) {
-      Swal.fire({
-        icon: "error",
-        title: "Erreur",
-        text: "Seuls les fichiers PDF sont autorisés",
-        confirmButtonColor: "#3085d6"
-      });
-      return;
-    }
-
-    setFichiers(selectedFiles);
-  };
-
-  const handleUpload = async (e) => {
+ const handleSubmit = async (e) => {
     e.preventDefault();
-    if (fichiers.length === 0) {
-      Swal.fire({
-        icon: "warning",
-        title: "Attention",
-        text: "Veuillez sélectionner au moins un fichier PDF",
-        confirmButtonColor: "#3085d6"
-      });
-      return;
+    setErrors({});
+    
+    // Vérification du token
+    if (!token) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Non authentifié',
+            text: "Vous n'êtes pas authentifié. Veuillez vous reconnecter."
+        });
+        return;
     }
 
-    const formData = new FormData();
-    fichiers.forEach(file => formData.append("files[]", file));
-    formData.append("id_declaration", monid);
-    formData.append("id_classeur", idclasseur);
+    // Vérification des permissions
+    const userPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+    
+    if (isEditing && centreToEdit) {
+        if (!userPermissions.includes('modifier_centre')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Permission refusée',
+                text: "Vous n'avez pas la permission 'modifier centre' pour modifier un centre"
+            });
+            return;
+        }
+    } else {
+        if (!userPermissions.includes('creer_centre')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Permission refusée',
+                text: "Vous n'avez pas la permission 'créer centre' pour ajouter un centre"
+            });
+            return;
+        }
+    }
+
+    // Validation du ministère
+    if (!ministereId) {
+        setErrors({ id_ministere: ["Veuillez sélectionner un ministère"] });
+        return;
+    }
+
+    setLoading(true);
 
     try {
-      setUploading(true);
-      await axios.post(`${API_BASE_URL}/documents-declaration/upload-multiple`, formData);
-      Swal.fire({
-        icon: "success",
-        title: "Succès",
-        text: "Documents PDF importés avec succès",
-        timer: 2000,
-        showConfirmButton: false
-      });
-      setFichiers([]);
-      fetchDocuments();
-    } catch (err) {
-      Swal.fire({
-        icon: "error",
-        title: "Erreur",
-        text: "Échec lors de l'import des documents",
-        confirmButtonColor: "#3085d6"
-      });
-    } finally {
-      setUploading(false);
-    }
-  };
+        const payload = {
+            nom,
+            description,
+            id_ministere: parseInt(ministereId),
+        };
 
-  const handleDownload = (id) => {
-    window.open(`${API_BASE_URL}/documents-declaration/download/${id}`, "_blank");
-  };
+        if (isEditing && centreToEdit) {
+            // Route: PUT centre_ordonnancements/{id} avec middleware permission:modifier_centre
+            await axios.put(
+                `${API_BASE_URL}/centre_ordonnancements/${centreToEdit.id}`,
+                payload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            Swal.fire({
+                title: "Succès",
+                text: "Centre modifié avec succès",
+                icon: "success",
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } else {
+            // Route: POST centre_ordonnancements avec middleware permission:creer_centre
+            await axios.post(
+                `${API_BASE_URL}/centre_ordonnancements`,
+                payload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            Swal.fire({
+                title: "Succès",
+                text: "Centre ajouté avec succès",
+                icon: "success",
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
 
-  const handleDelete = async (id) => {
-    const result = await Swal.fire({
-      title: "Confirmation de suppression",
-      text: "Voulez-vous vraiment supprimer ce document ? Cette action est irréversible.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Oui, supprimer",
-      cancelButtonText: "Annuler",
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-    });
-
-    if (result.isConfirmed) {
-      try {
-        await axios.delete(`${API_BASE_URL}/delete-document/${id}`);
-        Swal.fire({
-          icon: "success",
-          title: "Supprimé",
-          text: "Document supprimé avec succès",
-          timer: 2000,
-          showConfirmButton: false
-        });
-        fetchDocuments();
-      } catch (err) {
-        Swal.fire({
-          icon: "error",
-          title: "Erreur",
-          text: "Échec de la suppression du document",
-          confirmButtonColor: "#3085d6"
-        });
-      }
-    }
-  };
-
-  const handleScanning = async () => {
-    setScanning(true);
-    try {
-      const response = await axios.post("http://localhost:9000/scan", {}, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.data.status === "success") {
-        Swal.fire({
-          icon: "success",
-          title: "Succès",
-          text: "Document scanné et importé avec succès",
-          timer: 2000,
-          showConfirmButton: false
-        });
-        fetchDocuments();
-      } else {
-        Swal.fire({
-          icon: "error",
-          title: "Erreur",
-          text: `Échec du scan : ${response.data.message}`,
-          confirmButtonColor: "#3085d6"
-        });
-      }
+        // Réinitialisation après soumission
+        setNom("");
+        setDescription("");
+        setMinistereId("");
+        setIsEditing(false);
+        
+        // Appeler le callback de succès
+        if (onSuccess) {
+            onSuccess();
+        }
+        
+        // Fermer le modal
+        onClose();
+        
     } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "Erreur",
-        text: "Erreur lors de la communication avec le service de scan",
-        confirmButtonColor: "#3085d6"
-      });
-      console.error("Erreur lors du scan", error);
+        console.error('Erreur:', error);
+        
+        // Gestion des erreurs
+        if (error.response) {
+            const { status, data } = error.response;
+            
+            // Erreur 403 - Permission denied (middleware Laravel)
+            if (status === 403) {
+                const permission = isEditing ? 'modifier_centre' : 'creer_centre';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: data.message || `Vous n'avez pas la permission ${permission}`,
+                    timer: 3000
+                });
+            }
+            // Erreur 422 - Validation errors
+            else if (status === 422 && data.errors) {
+                setErrors(data.errors);
+                
+                // Afficher la première erreur
+                const firstError = Object.values(data.errors)[0]?.[0];
+                if (firstError) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Erreur de validation',
+                        text: firstError,
+                        timer: 3000
+                    });
+                }
+            }
+            // Erreur 401 - Non authentifié
+            else if (status === 401) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Session expirée',
+                    text: data.message || 'Votre session a expiré. Veuillez vous reconnecter.',
+                    timer: 3000
+                });
+                
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 3000);
+            }
+            // Autres erreurs
+            else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: data.message || "Erreur lors de l'enregistrement",
+                    timer: 3000
+                });
+            }
+        } else if (error.request) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur réseau',
+                text: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
+                timer: 3000
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur',
+                text: error.message || "Une erreur inattendue s'est produite",
+                timer: 3000
+            });
+        }
     } finally {
-      setScanning(false);
+        setLoading(false);
     }
+};
+
+  const handleCancel = () => {
+    setNom("");
+    setDescription("");
+    setMinistereId("");
+    setErrors({});
+    setIsEditing(false);
+    onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
-    <div className="modal fade" id={modalId} tabIndex="-1" role="dialog" aria-hidden="true">
-      <div className="modal-dialog modal-dialog-centered modal-lg" role="document">
-        <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '16px' }}>
-          {/* Header */}
-          <div className="modal-header bg-primary text-white position-relative py-3 px-4" style={{ borderRadius: '16px 16px 0 0' }}>
-            <h5 className="modal-title mb-0 font-weight-bold d-flex align-items-center">
-              <FaFilePdf className="mr-2" />
-              Documents - {projet}
+    <div className="modal fade show d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <div className="modal-dialog modal-dialog-centered" role="document" style={{ maxWidth: '550px' }}>
+        <div className="modal-content border-0 shadow-lg">
+          <div className="modal-header bg-primary text-white position-relative py-3 px-4">
+            <h5 className="modal-title mb-0 font-weight-bold">
+              <FaBuilding className="mr-2" />
+              {isEditing ? "Modifier le Centre" : "Nouveau Centre d'Ordonnancement"}
             </h5>
             <button
               type="button"
               className="btn btn-sm btn-light position-absolute"
-              onClick={onClose}
-              data-dismiss="modal"
-              aria-label="Close"
+              onClick={handleCancel}
               style={{
                 top: '12px',
                 right: '15px',
@@ -218,208 +244,137 @@ const DocumentModal = ({ modalId, isOpen, onClose, monid, projet, idclasseur, ve
               <FaTimes />
             </button>
           </div>
-
-          {/* Body */}
+          
           <div className="modal-body p-4">
-            {/* Section upload et scan */}
-            {verification && (
-              <form onSubmit={handleUpload} className="mb-4">
-                <div className="row">
-                  <div className="col-md-8">
-                    <div className="form-group mb-3">
-                      <label className="font-weight-bold mb-2 d-flex align-items-center">
-                        <FaCloudUploadAlt className="text-primary mr-2" />
-                        Importer des fichiers PDF
-                      </label>
-                      <div className="input-group">
-                        <div className="input-group-prepend">
-                          <span className="input-group-text bg-light border-right-0">
-                            <FaFileAlt className="text-primary" />
-                          </span>
-                        </div>
-                        <input
-                          type="file"
-                          multiple
-                          accept="application/pdf"
-                          className="form-control"
-                          onChange={handleFileChange}
-                          disabled={uploading || scanning}
-                          style={{ height: '45px' }}
-                        />
-                      </div>
-                      {fichiers.length > 0 && (
-                        <small className="text-success d-block mt-2">
-                          {fichiers.length} fichier(s) sélectionné(s)
-                        </small>
-                      )}
-                    </div>
+            <form onSubmit={handleSubmit}>
+              {/* Ministère */}
+              <div className="form-group mb-4">
+                <label className="font-weight-bold mb-2">
+                  Service d'assiette <span className="text-danger">*</span>
+                </label>
+                <div className="input-group">
+                  <div className="input-group-prepend">
+                    <span className="input-group-text bg-light border-right-0">
+                      <FaFolder className="text-primary" />
+                    </span>
                   </div>
-                  <div className="col-md-4 d-flex align-items-end">
-                    <div className="d-flex w-100">
-                      <button 
-                        className="btn btn-success flex-grow-1 mr-2 d-flex align-items-center justify-content-center" 
-                        type="submit" 
-                        disabled={uploading || scanning}
-                        style={{ height: '45px' }}
-                      >
-                        {uploading ? (
-                          <>
-                            <FaSpinner className="fa-spin mr-2" />
-                            Chargement...
-                          </>
-                        ) : (
-                          <>
-                            <FaCloudUploadAlt className="mr-2" />
-                            Uploader
-                          </>
-                        )}
-                      </button>
-                      <button 
-                        className="btn btn-secondary d-flex align-items-center justify-content-center" 
-                        type="button" 
-                        onClick={handleScanning} 
-                        disabled={uploading || scanning}
-                        style={{ width: '45px', height: '45px' }}
-                        title="Scanner un document"
-                      >
-                        {scanning ? (
-                          <FaSpinner className="fa-spin" />
-                        ) : (
-                          <FaQrcode />
-                        )}
-                      </button>
+                  <select
+                    className={`form-control ${errors.id_ministere ? 'is-invalid' : ''}`}
+                    value={ministereId}
+                    onChange={(e) => setMinistereId(e.target.value)}
+                    disabled={loading}
+                  >
+                    <option value="">-- Sélectionnez un service d'assiette --</option>
+                    {ministeres.map((m) => (
+                      <option key={m.id} value={String(m.id)}>
+                        {m.nom}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.id_ministere && (
+                    <div className="invalid-feedback d-block mt-2">
+                      {errors.id_ministere[0]}
                     </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Nom du centre */}
+              <div className="form-group mb-4">
+                <label className="font-weight-bold mb-2">
+                  Nom du centre <span className="text-danger">*</span>
+                </label>
+                <div className="input-group">
+                  <div className="input-group-prepend">
+                    <span className="input-group-text bg-light border-right-0">
+                      <FaBuilding className="text-primary" />
+                    </span>
                   </div>
+                  <input
+                    type="text"
+                    className={`form-control ${errors.nom ? 'is-invalid' : ''}`}
+                    placeholder="Nom du centre d'ordonnancement"
+                    value={nom}
+                    onChange={(e) => setNom(e.target.value)}
+                    disabled={loading}
+                  />
+                  {errors.nom && (
+                    <div className="invalid-feedback d-block mt-2">
+                      {errors.nom[0]}
+                    </div>
+                  )}
                 </div>
-              </form>
-            )}
+              </div>
 
-            {/* Séparateur */}
-            {verification && <hr className="my-4" />}
-
-            {/* Liste des documents */}
-            <div className="documents-section">
-              <h6 className="font-weight-bold mb-3 d-flex align-items-center">
-                <FaFilePdf className="text-danger mr-2" />
-                Documents importés ({documents.length})
-              </h6>
-
-              {loading ? (
-                <div className="text-center py-4">
-                  <FaSpinner className="fa-spin text-primary" size={32} />
-                  <p className="text-muted mt-2">Chargement des documents...</p>
+              {/* Description */}
+              <div className="form-group mb-4">
+                <label className="font-weight-bold mb-2">
+                  Description
+                </label>
+                <div className="input-group">
+                  <div className="input-group-prepend">
+                    <span className="input-group-text bg-light border-right-0" style={{ paddingTop: '12px', paddingBottom: '12px' }}>
+                      <FaAlignLeft className="text-primary" />
+                    </span>
+                  </div>
+                  <textarea
+                    className={`form-control ${errors.description ? 'is-invalid' : ''}`}
+                    placeholder="Description du centre (optionnelle)"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    disabled={loading}
+                    rows="3"
+                    style={{ resize: 'vertical' }}
+                  />
+                  {errors.description && (
+                    <div className="invalid-feedback d-block mt-2">
+                      {errors.description[0]}
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-hover border">
-                    <thead className="thead-light">
-                      <tr>
-                        <th className="border-0 py-3" style={{ width: '60px' }}>#</th>
-                        <th className="border-0 py-3">Nom du document</th>
-                        <th className="border-0 py-3 text-center" style={{ width: '200px' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {documents.length === 0 ? (
-                        <tr>
-                          <td colSpan="3" className="text-center py-5">
-                            <div className="text-muted">
-                              <FaFilePdf className="mb-3" style={{ fontSize: '3rem', opacity: 0.5 }} />
-                              <h6>Aucun document trouvé</h6>
-                              <p className="mb-0 small">Aucun document n'est associé à cette note.</p>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        documents.map((doc, index) => (
-                          <tr key={doc.id} className="border-bottom">
-                            <td className="align-middle font-weight-bold text-muted">
-                              {index + 1}
-                            </td>
-                            <td className="align-middle">
-                              <div className="d-flex align-items-center">
-                                <div className="rounded-circle bg-danger bg-opacity-10 p-2 mr-3 d-flex align-items-center justify-content-center">
-                                  <FaFilePdf className="text-danger" size={18} />
-                                </div>
-                                <div>
-                                  <span className="font-weight-medium">{doc.nom_native}</span>
-                                  <small className="d-block text-muted">
-                                    {doc.created_at && new Date(doc.created_at).toLocaleDateString('fr-FR')}
-                                  </small>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="align-middle text-center">
-                              <button 
-                                className="btn btn-sm btn-info mr-2 d-inline-flex align-items-center" 
-                                onClick={() => handleDownload(doc.id)}
-                                style={{ borderRadius: '8px' }}
-                              >
-                                <FaEye className="mr-1" size={14} />
-                                Voir
-                              </button>
-                              <button 
-                                className="btn btn-sm btn-danger d-inline-flex align-items-center" 
-                                onClick={() => handleDelete(doc.id)}
-                                style={{ borderRadius: '8px' }}
-                              >
-                                <FaTrashAlt className="mr-1" size={14} />
-                                Supprimer
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+              </div>
+
+              {/* Boutons d'action */}
+              <div className="row mt-4">
+                <div className="col-6 px-1">
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary w-100 py-3 font-weight-bold"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                        Traitement...
+                      </>
+                    ) : isEditing ? (
+                      <>
+                        <FaEdit className="mr-2" /> Modifier
+                      </>
+                    ) : (
+                      <>
+                        <FaPlus className="mr-2" /> Ajouter
+                      </>
+                    )}
+                  </button>
                 </div>
-              )}
-            </div>
+                <div className="col-6 px-1">
+                  <button
+                    type="button"
+                    className="btn btn-secondary w-100 py-3 font-weight-bold"
+                    onClick={handleCancel}
+                    disabled={loading}
+                  >
+                    <FaTimes className="mr-2" /> Annuler
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        .modal-content {
-          border-radius: 16px;
-        }
-        
-        .modal-header {
-          border-radius: 16px 16px 0 0;
-        }
-        
-        .table th {
-          font-weight: 600;
-          font-size: 0.85rem;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          color: #6c757d;
-        }
-        
-        .table td {
-          vertical-align: middle;
-          padding: 1rem 0.75rem;
-        }
-        
-        .btn {
-          transition: all 0.2s ease;
-        }
-        
-        .btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 5px 10px rgba(0,0,0,0.1);
-        }
-        
-        .bg-opacity-10 {
-          opacity: 0.1;
-        }
-        
-        hr {
-          border-top: 1px solid rgba(0,0,0,0.1);
-        }
-      `}</style>
     </div>
   );
 };
 
-export default DocumentModal;
+export default ModalCentre;

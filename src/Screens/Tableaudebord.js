@@ -5,7 +5,7 @@ import Head from "../Composant/Head";
 import Menus from "../Composant/Menus";
 import { API_BASE_URL } from "../config";
 import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
-import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
+import { useHistory } from "react-router-dom"; // CORRECTION ICI
 import {
   FaFolder,
   FaFileAlt,
@@ -48,6 +48,8 @@ const DashboardScreen = () => {
   const role = utilisateur?.role || "";
   const id_direction = utilisateur?.id_direction || "";
 
+
+
   // 🔹 États principaux
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,7 +73,7 @@ const DashboardScreen = () => {
   const [selectedDirection, setSelectedDirection] = useState("");
   const [selectedPeriode, setSelectedPeriode] = useState("all");
   const [selectedStatut, setSelectedStatut] = useState("tous");
-  const [showFilters, setShowFilters] = useState(true); // État pour afficher/cacher les filtres
+  const [showFilters, setShowFilters] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({
     current_page: 1,
@@ -88,6 +90,11 @@ const DashboardScreen = () => {
       fetchAllData();
     }
   }, [token, currentPage]);
+
+  // 🔹 Surveiller les changements de selectedDirection (DEBUG)
+  useEffect(() => {
+    console.log("🔄 selectedDirection a changé:", selectedDirection);
+  }, [selectedDirection]);
 
   // 🔹 Obtenir les en-têtes d'authentification
   const getAuthHeaders = () => ({
@@ -146,6 +153,7 @@ const DashboardScreen = () => {
         `${API_BASE_URL}/dashboard/classifiers`,
         { headers: getAuthHeaders(), params }
       );
+      
 
       if (response.data.success) {
         setClassificateurs(response.data.data.data || []);
@@ -159,15 +167,17 @@ const DashboardScreen = () => {
     } catch (error) {
       console.error("Erreur classificateurs:", error);
     }
+  
   };
 
   // 🔹 Directions
   const fetchDirections = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/direction`, {
+      const response = await axios.get(`${API_BASE_URL}/departements`, {
         headers: getAuthHeaders()
       });
-      setDirections(response.data);
+      setDirections(response.data.data.data);
+      console.log("📋 Directions chargées:", response.data.data.data);
     } catch (error) {
       console.error("Erreur directions:", error);
     }
@@ -227,19 +237,67 @@ const DashboardScreen = () => {
     fetchAllData();
   };
 
-  // 🔹 Navigation vers liste des documents
-  const handleListeDocument = (classifier) => {
-    history.push({
-      pathname: `/listedocument/${classifier.id}`,
-      state: {
-        classifier,
-        direction: selectedDirection,
-        periode: selectedPeriode,
-        searchTerm
-      }
+const handleListeDocument = (classifier) => {
+    // 🔍 Vérifier la valeur de selectedDirection
+    console.log("🔍 DONNÉES AVANT ENVOI:", {
+        classifier: classifier,
+        selectedDirection: selectedDirection,
+        selectedPeriode: selectedPeriode,
+        searchTerm: searchTerm
     });
-  };
 
+    // Initialiser les variables
+    let directionAEnvoyer = selectedDirection;
+    let nomDirectionAEnvoyer = "";
+    let directionInfo = null;
+
+    if (!directionAEnvoyer) {
+        // Cas 1: Utiliser les données du classificateur
+        if (classifier.directions && classifier.directions.length > 0) {
+            directionInfo = classifier.directions[0];
+            directionAEnvoyer = directionInfo.id;
+            nomDirectionAEnvoyer = directionInfo.nom || directionInfo.sigle || "";
+            console.log("📌 Direction trouvée dans directions[]:", directionInfo);
+        }
+        // Cas 2: Utiliser les déclarations
+        else if (classifier.declarations && classifier.declarations.length > 0) {
+            const firstDecl = classifier.declarations[0];
+            directionAEnvoyer = firstDecl.id_direction;
+            nomDirectionAEnvoyer = firstDecl.nom_direction || 
+                                   firstDecl.departement?.nom || 
+                                   firstDecl.direction?.nom || "";
+            directionInfo = firstDecl.departement || firstDecl.direction;
+            console.log("📌 Direction trouvée dans declarations[]:", firstDecl);
+        }
+        // Cas 3: Utiliser la direction de l'utilisateur
+        else {
+            directionAEnvoyer = id_direction;
+            directionInfo = directions.find(d => d.id === parseInt(id_direction));
+            nomDirectionAEnvoyer = directionInfo?.nom || directionInfo?.sigle || "";
+            console.log("📌 Direction utilisateur:", directionInfo);
+        }
+    } else {
+        // Cas 4: Direction sélectionnée manuellement
+        directionInfo = directions.find(d => d.id === parseInt(selectedDirection));
+        nomDirectionAEnvoyer = directionInfo?.nom || directionInfo?.sigle || "";
+    }
+
+    // ALERTE pour voir la valeur envoyée
+   // alert(`Direction envoyée: ${directionAEnvoyer} - ${nomDirectionAEnvoyer}`);
+
+    // ✅ Envoi des données enrichies
+    history.push({
+        pathname: `/listedocument/${classifier.id}`,
+        state: {
+            classifier,
+            direction: directionAEnvoyer,
+            nomDirection: nomDirectionAEnvoyer,
+            directionInfo: directionInfo,  // ← Toutes les infos de la direction
+            periode: selectedPeriode,
+            searchTerm
+        }
+    });
+};
   // 🔹 Obtenir l'icône du fichier
   const getFileIcon = (nom) => {
     const type = nom?.toLowerCase() || "";
@@ -280,7 +338,7 @@ const DashboardScreen = () => {
     }
   };
 
-  // 🔹 Pagination intelligente
+  // 🔹 Pagination
   const renderPagination = () => {
     const totalPages = pagination.last_page;
     if (totalPages <= 1) return null;
@@ -359,6 +417,8 @@ const DashboardScreen = () => {
       <div className="content-wrapper">
         <div className="content-header">
           <div className="container-fluid">
+
+         
 
             {/* HEADER MODERNE */}
             <div className="dashboard-header mb-4">
@@ -480,7 +540,7 @@ const DashboardScreen = () => {
               </div>
             </div>
 
-            {/* FILTRES AVANCÉS - AVEC BOUTON POUR CACHER/AFFICHER */}
+            {/* FILTRES AVANCÉS */}
             <div className="filters-section bg-white rounded shadow-sm mb-4">
               <div 
                 className="filters-header p-3 d-flex align-items-center justify-content-between"
@@ -519,21 +579,14 @@ const DashboardScreen = () => {
                         <FaSearch className="mr-1" />
                         Mot-clé
                       </label>
-                      <div className="input-group">
-                        <div className="input-group-prepend">
-                          <span className="input-group-text bg-white border-right-0">
-                            <FaTags className="text-muted" />
-                          </span>
-                        </div>
-                        <input
-                          type="text"
-                          className="form-control border-left-0"
-                          placeholder="Nom du classeur..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          disabled={loading}
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Nom du classeur..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        disabled={loading}
+                      />
                     </div>
 
                     <div className="col-md-3 mb-3">
@@ -544,7 +597,10 @@ const DashboardScreen = () => {
                       <select
                         className="form-control"
                         value={selectedDirection}
-                        onChange={(e) => setSelectedDirection(e.target.value)}
+                        onChange={(e) => {
+                          console.log("📝 Changement direction:", e.target.value);
+                          setSelectedDirection(e.target.value);
+                        }}
                         disabled={loading}
                       >
                         <option value="">Toutes les directions</option>
@@ -554,6 +610,11 @@ const DashboardScreen = () => {
                           </option>
                         ))}
                       </select>
+                      {selectedDirection && (
+                        <small className="text-success d-block mt-1">
+                          ✅ Direction sélectionnée: {directions.find(d => d.id === parseInt(selectedDirection))?.nom}
+                        </small>
+                      )}
                     </div>
 
                     <div className="col-md-2 mb-3">
@@ -593,28 +654,14 @@ const DashboardScreen = () => {
                     </div>
 
                     <div className="col-md-2 mb-3 d-flex align-items-end">
-                      <div className="btn-group w-100">
-                        <button
-                          className="btn btn-primary flex-grow-1 d-flex align-items-center justify-content-center"
-                          onClick={handleSearch}
-                          disabled={loading}
-                        >
-                          {loading ? (
-                            <FaSpinner className="fa-spin mr-2" />
-                          ) : (
-                            <FaSearch className="mr-2" />
-                          )}
-                          Chercher
-                        </button>
-                        <button
-                          className="btn btn-outline-secondary"
-                          onClick={handleReset}
-                          disabled={loading}
-                          title="Réinitialiser"
-                        >
-                          <FaSync className={loading ? "fa-spin" : ""} />
-                        </button>
-                      </div>
+                      <button
+                        className="btn btn-primary w-100"
+                        onClick={handleSearch}
+                        disabled={loading}
+                      >
+                        {loading ? <FaSpinner className="fa-spin mr-2" /> : <FaSearch className="mr-2" />}
+                        Chercher
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -729,7 +776,8 @@ const DashboardScreen = () => {
           </div>
         </div>
       </div>
-
+  
+  
       <style jsx>{`
         .dashboard-documents {
           background: linear-gradient(135deg, #f5f7fa 0%, #f8f9fc 100%);
@@ -872,9 +920,9 @@ const DashboardScreen = () => {
             height: 48px;
           }
         }
-      `}</style>
+       `}</style>
     </div>
   );
 };
-
 export default DashboardScreen;
+

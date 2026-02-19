@@ -28,64 +28,202 @@ const ModalMinistere = ({ isOpen, onClose, articleToEdit = null, onSuccess }) =>
     setErrors({});
   }, [articleToEdit]);
 
-  const handleSubmit = async (e) => {
+ const handleSubmit = async (e) => {
     e.preventDefault();
     setErrors({});
-    if (!token) return;
+    
+    // Vérification du token
+    if (!token) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Non authentifié',
+            text: "Vous n'êtes pas authentifié. Veuillez vous reconnecter."
+        });
+        return;
+    }
+
+    // Vérification des permissions
+    const userPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+    
+    if (isEditing && articleToEdit) {
+        if (!userPermissions.includes('modifier_service_assiette')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Permission refusée',
+                text: "Vous n'avez pas la permission 'modifier service assiette' pour modifier un service"
+            });
+            return;
+        }
+    } else {
+        if (!userPermissions.includes('creer_service_assiette')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Permission refusée',
+                text: "Vous n'avez pas la permission 'créer service assiette' pour ajouter un service"
+            });
+            return;
+        }
+    }
+
+    // Validation des champs
+    if (!nom || nom.trim() === '') {
+        setErrors({ nom: ["Le nom est obligatoire"] });
+        Swal.fire({
+            icon: 'warning',
+            title: 'Validation',
+            text: "Le nom du service est obligatoire",
+            timer: 2000
+        });
+        return;
+    }
+
+    if (!article_budgetaire || article_budgetaire.trim() === '') {
+        setErrors({ article_budgetaire: ["L'article budgétaire est obligatoire"] });
+        Swal.fire({
+            icon: 'warning',
+            title: 'Validation',
+            text: "L'article budgétaire est obligatoire",
+            timer: 2000
+        });
+        return;
+    }
 
     setLoading(true);
 
     try {
-      if (isEditing && articleToEdit) {
-        await axios.put(
-          `${API_BASE_URL}/update-article/${articleToEdit.id}`,
-          { nom, article_budgetaire },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        Swal.fire({
-          title: "Succès",
-          text: "Service modifié avec succès",
-          icon: "success",
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } else {
-        await axios.post(
-          `${API_BASE_URL}/create-article`,
-          { nom, article_budgetaire },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        Swal.fire({
-          title: "Succès",
-          text: "Service ajouté avec succès",
-          icon: "success",
-          timer: 2000,
-          showConfirmButton: false
-        });
-      }
+        const payload = {
+            nom: nom.trim(),
+            article_budgetaire: article_budgetaire.trim()
+        };
 
-      // Réinitialisation après soumission
-      setNom("");
-      setArticleBudgetaire("");
-      setIsEditing(false);
-      
-      // Appeler le callback de succès
-      if (onSuccess) {
-        onSuccess();
-      }
-      
-      // Fermer le modal
-      onClose();
+        if (isEditing && articleToEdit) {
+            // Route: PUT /update-article/{id} avec middleware permission:modifier_service_assiette
+            await axios.put(
+                `${API_BASE_URL}/update-article/${articleToEdit.id}`,
+                payload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            Swal.fire({
+                title: "Succès",
+                text: "Service modifié avec succès",
+                icon: "success",
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } else {
+            // Route: POST /create-article avec middleware permission:creer_service_assiette
+            await axios.post(
+                `${API_BASE_URL}/create-article`,
+                payload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            Swal.fire({
+                title: "Succès",
+                text: "Service ajouté avec succès",
+                icon: "success",
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+
+        // Réinitialisation après soumission
+        setNom("");
+        setArticleBudgetaire("");
+        setIsEditing(false);
+        
+        // Appeler le callback de succès
+        if (onSuccess) {
+            onSuccess();
+        }
+        
+        // Fermer le modal
+        onClose();
+        
     } catch (error) {
-      if (error.response?.data?.errors) {
-        setErrors(error.response.data.errors);
-      } else {
-        Swal.fire("Erreur", "Erreur lors de l'enregistrement", "error");
-      }
+        console.error('Erreur:', error);
+        
+        // Gestion des erreurs
+        if (error.response) {
+            const { status, data } = error.response;
+            
+            // Erreur 403 - Permission denied (middleware Laravel)
+            if (status === 403) {
+                const permission = isEditing ? 'modifier_service_assiette' : 'creer_service_assiette';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: data.message || `Vous n'avez pas la permission ${permission}`,
+                    timer: 3000
+                });
+            }
+            // Erreur 422 - Validation errors
+            else if (status === 422 && data.errors) {
+                setErrors(data.errors);
+                
+                // Afficher la première erreur
+                const firstError = Object.values(data.errors)[0]?.[0];
+                if (firstError) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Erreur de validation',
+                        text: firstError,
+                        timer: 3000
+                    });
+                }
+            }
+            // Erreur 401 - Non authentifié
+            else if (status === 401) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Session expirée',
+                    text: data.message || 'Votre session a expiré. Veuillez vous reconnecter.',
+                    timer: 3000
+                });
+                
+                setTimeout(() => {
+                    localStorage.clear();
+                    window.location.href = '/';
+                }, 3000);
+            }
+            // Erreur 404 - Non trouvé
+            else if (status === 404) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Non trouvé',
+                    text: data.message || "Le service n'existe pas",
+                    timer: 3000
+                });
+            }
+            // Autres erreurs
+            else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: data.message || "Erreur lors de l'enregistrement",
+                    timer: 3000
+                });
+            }
+        } else if (error.request) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur réseau',
+                text: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
+                timer: 3000
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur',
+                text: error.message || "Une erreur inattendue s'est produite",
+                timer: 3000
+            });
+        }
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   const handleCancel = () => {
     setNom("");

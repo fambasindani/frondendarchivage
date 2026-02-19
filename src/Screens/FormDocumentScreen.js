@@ -59,7 +59,7 @@ const FormDocumentScreen = () => {
         // 1. Charger les listes dropdown
         console.log("Chargement des listes dropdown...");
         const [directionsRes, emplacementsRes, classeursRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/direction`, { 
+          axios.get(`${API_BASE_URL}/departements`, { 
             headers: { Authorization: `Bearer ${token}` } 
           }),
           axios.get(`${API_BASE_URL}/emplacement`, { 
@@ -70,7 +70,7 @@ const FormDocumentScreen = () => {
           }),
         ]);
 
-        setDirections(directionsRes.data);
+        setDirections(directionsRes.data.data.data);
         setEmplacements(emplacementsRes.data);
         setClasseurs(classeursRes.data);
         

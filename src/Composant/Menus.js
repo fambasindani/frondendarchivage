@@ -1,3 +1,5 @@
+// Dans votre composant Menus.jsx
+
 import { Link, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -24,18 +26,29 @@ const Menus = () => {
   const [openConfig, setOpenConfig] = useState(false);
   const [openGestionUtilisateurs, setOpenGestionUtilisateurs] = useState(false);
   const [activeMenu, setActiveMenu] = useState("");
+  const [userPermissions, setUserPermissions] = useState([]);
   const sidebarRef = useRef(null);
-  const location = useLocation(); // 🔥 Ajouter useLocation
+  const location = useLocation();
 
- // const role = JSON.parse(localStorage.getItem("utilisateur"))?.role;
-   const role = JSON.parse(localStorage.getItem("role"));
+  const role = JSON.parse(localStorage.getItem("role"));
   const entreprise = localStorage.getItem("archive_module"); // "ad" ou "np"
 
-  // 🔥 SYNC ACTIVE MENU AVEC L'URL AU CHARGEMENT ET À CHAQUE CHANGEMENT D'URL
+  // Récupérer les permissions du localStorage
+  useEffect(() => {
+    const permissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+    setUserPermissions(permissions);
+    console.log('Permissions dans le menu:', permissions);
+  }, []);
+
+  // Fonction pour vérifier si une permission existe
+  const hasPermission = (permissionCode) => {
+    return userPermissions.includes(permissionCode);
+  };
+
+  // SYNC ACTIVE MENU AVEC L'URL
   useEffect(() => {
     const path = location.pathname;
-    //alert(role[0].nom)
-   // console.log(role[0].nom)
+    
     // Dashboard
     if (path.includes("/tableaudebord")) {
       setActiveMenu("dashboard");
@@ -100,18 +113,16 @@ const Menus = () => {
       setActiveMenu("gestion");
       setOpenGestionUtilisateurs(true);
     }
-  }, [location.pathname]); // 🔥 Se déclenche à chaque changement d'URL
+  }, [location.pathname]);
 
   const toggleConfigMenu = () => {
     setOpenConfig(!openConfig);
     setOpenGestionUtilisateurs(false);
-    // Ne pas changer activeMenu ici, laisser l'URL le gérer
   };
 
   const toggleGestionUtilisateurs = () => {
     setOpenGestionUtilisateurs(!openGestionUtilisateurs);
     setOpenConfig(false);
-    // Ne pas changer activeMenu ici, laisser l'URL le gérer
   };
 
   const fermerSidebar = () => {
@@ -144,7 +155,6 @@ const Menus = () => {
   const brandText = entreprise === "np" ? "Archiv-NP" : "Archiv-Docs";
   const brandLogo = entreprise === "np" ? "#4CAF50" : "#2196F3";
 
-  // 🔥 Fonction pour vérifier si un menu est actif
   const isActive = (menuName) => {
     return activeMenu === menuName ? "active" : "";
   };
@@ -170,23 +180,26 @@ const Menus = () => {
       <div className="sidebar">
         <nav className="mt-2">
           <ul className="nav nav-pills nav-sidebar flex-column" role="menu" data-accordion="false">
-            {/* Dashboard */}
-            <li className="nav-item">
-              <Link
-                to={entreprise === "ad" ? "/tableaudebord" : "/tableaudebordnote"}
-                className={`nav-link ${isActive("dashboard")}`}
-                onClick={() => {
-                  fermerSidebar();
-                }}
-              >
-                <FaTachometerAlt className="nav-icon" />
-                <p>Dashboard</p>
-                <span className="nav-badge">1</span>
-              </Link>
-            </li>
+            
+            {/* CORRECTION ICI - Dashboard avec vérification de permission */}
+            {hasPermission('dashboard') && (
+              <li className="nav-item">
+                <Link
+                  to={entreprise === "ad" ? "/tableaudebord" : "/tableaudebordnote"}
+                  className={`nav-link ${isActive("dashboard")}`}
+                  onClick={() => {
+                    fermerSidebar();
+                  }}
+                >
+                  <FaTachometerAlt className="nav-icon" />
+                  <p>Dashboard</p>
+                  <span className="nav-badge">1</span>
+                </Link>
+              </li>
+            )}
 
-            {/* Configuration */}
-            {(role[0].nom === "Directeur" || role === "encodeur") && (
+            {/* Configuration - visible pour Directeur ou encodeur */}
+            {(hasPermission('configuration')) && (
               <li className={`nav-item ${openConfig ? "menu-open" : ""}`}>
                 <a
                   href="#"
@@ -202,8 +215,8 @@ const Menus = () => {
                 </a>
 
                 <ul className="nav nav-treeview submenu" style={{ display: openConfig ? "block" : "none" }}>
-                  {/* Direction - visible seulement pour "ad" (Autres Docs) */}
-                  {(entreprise === "ad") && (
+                  {/* Direction - visible seulement pour "ad" ET permission correspondante */}
+                  {(entreprise === "ad" && hasPermission('direction')) && (
                     <li className="nav-item">
                       <Link 
                         to="/direction" 
@@ -218,22 +231,24 @@ const Menus = () => {
                     </li>
                   )}
 
-                  {/* Classeur - visible pour tous */}
-                  <li className="nav-item">
-                    <Link 
-                      to="/classeur" 
-                      className={`nav-link ${isActive("classeur")}`}
-                      onClick={() => {
-                        fermerSidebar();
-                      }}
-                    >
-                      <FaFolder className="submenu-icon" />
-                      <p>Classeur</p>
-                    </Link>
-                  </li>
+                  {/* Classeur - visible si permission classeur */}
+                  {hasPermission('classeur') && (
+                    <li className="nav-item">
+                      <Link 
+                        to="/classeur" 
+                        className={`nav-link ${isActive("classeur")}`}
+                        onClick={() => {
+                          fermerSidebar();
+                        }}
+                      >
+                        <FaFolder className="submenu-icon" />
+                        <p>Classeur</p>
+                      </Link>
+                    </li>
+                  )}
 
-                  {/* Centre - visible seulement pour "np" */}
-                  {(entreprise === "np") && (
+                  {/* Centre - visible seulement pour "np" ET permission correspondante */}
+                  {(entreprise === "np" && hasPermission('centre')) && (
                     <li className="nav-item">
                       <Link 
                         to="/centre-ordonnancement" 
@@ -248,22 +263,24 @@ const Menus = () => {
                     </li>
                   )}
 
-                  {/* Emplacement - visible pour tous */}
-                  <li className="nav-item">
-                    <Link 
-                      to="/emplacement" 
-                      className={`nav-link ${isActive("emplacement")}`}
-                      onClick={() => {
-                        fermerSidebar();
-                      }}
-                    >
-                      <FaMapMarkerAlt className="submenu-icon" />
-                      <p>Emplacement</p>
-                    </Link>
-                  </li>
+                  {/* Emplacement - visible si permission emplacement */}
+                  {hasPermission('emplacement') && (
+                    <li className="nav-item">
+                      <Link 
+                        to="/emplacement" 
+                        className={`nav-link ${isActive("emplacement")}`}
+                        onClick={() => {
+                          fermerSidebar();
+                        }}
+                      >
+                        <FaMapMarkerAlt className="submenu-icon" />
+                        <p>Emplacement</p>
+                      </Link>
+                    </li>
+                  )}
 
-                  {/* Article budgétaire - visible seulement pour "np" */}
-                  {(entreprise === "np") && (
+                  {/* Serv. d'assiette - visible seulement pour "np" ET permission serv_assiette */}
+                  {(entreprise === "np" && hasPermission('serv_assiette')) && (
                     <li className="nav-item">
                       <Link 
                         to="/ministere" 
@@ -281,8 +298,8 @@ const Menus = () => {
               </li>
             )}
 
-            {/* Documents - visible seulement pour "ad" et rôles admin/encodeur */}
-            {((role === "admin" || role === "encodeur") && entreprise === "ad") && (
+            {/* Documents - visible seulement pour "ad" ET permission archiv_doc */}
+            {(entreprise === "ad" && hasPermission('archiv_doc')) && (
               <li className="nav-item">
                 <Link 
                   to="/document" 
@@ -298,8 +315,8 @@ const Menus = () => {
               </li>
             )}
 
-            {/* Notes de Perception - visible seulement pour "np" et rôles admin/encodeur */}
-            {((role === "admin" || role === "encodeur") && entreprise === "np") && (
+            {/* Notes de Perception - visible seulement pour "np" ET permission note_perception */}
+            {(entreprise === "np" && hasPermission('note_perception')) && (
               <li className="nav-item">
                 <Link 
                   to="/note-perception" 
@@ -314,8 +331,8 @@ const Menus = () => {
               </li>
             )}
 
-            {/* Gestion des Utilisateurs - visible seulement pour admin */}
-            {role[0].nom === "Directeur" && (
+            {/* Gestion des Utilisateurs - visible seulement pour Encodeur */}
+             {hasPermission('utilisateur')  && (
               <li className={`nav-item ${openGestionUtilisateurs ? "menu-open" : ""}`}>
                 <a
                   href="#"

@@ -1,7 +1,7 @@
 const Table = ({ columns, data, actions, emptyMessage = "Aucune donnée trouvée", startIndex = 0 }) => {
   return (
-    <table className="table table-bordered table-hover">
-      <thead className="thead-dark">
+    <table className="table table-hover mb-0">
+      <thead className="thead-light">
         <tr>
           <th style={{ width: "7px" }}>#</th>
           {columns.map((col, index) => (

@@ -158,41 +158,146 @@ const MinistereScreen = () => {
         setShowModal(true);
     };
 
-    const handleDelete = (id) => {
-        if (!token) return;
-
+const handleDelete = (id, nom, article_budgetaire) => {
+    // Vérification du token
+    if (!token) {
         Swal.fire({
-            title: "Voulez-vous désactiver ce service ?",
-            text: "Cette action va mettre à jour son statut.",
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#3085d6",
-            cancelButtonColor: "#d33",
-            confirmButtonText: "Oui, désactiver",
-            cancelButtonText: "Annuler",
-        }).then((result) => {
-            if (result.isConfirmed) {
-                axios
-                    .delete(`${API_BASE_URL}/delete-article/${id}`,
-                        { headers: { Authorization: `Bearer ${token}` } }
-                    )
-                    .then(() => {
-                        Swal.fire({
-                            title: "Désactivé !",
-                            text: "Service désactivé avec succès.",
-                            icon: "success",
-                            timer: 2000,
-                            showConfirmButton: false
-                        });
-                        fetchArticles();
-                    })
-                    .catch((error) => {
-                        Swal.fire("Erreur", "Erreur lors de la désactivation.", "error");
-                        console.error(error);
-                    });
-            }
+            icon: 'error',
+            title: 'Non authentifié',
+            text: "Vous n'êtes pas authentifié. Veuillez vous reconnecter."
         });
-    };
+        return;
+    }
+
+    // Vérification des permissions
+    const userPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+    
+    if (!userPermissions.includes('supprimer_service_assiette')) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Permission refusée',
+            text: "Vous n'avez pas la permission 'supprimer service assiette' pour désactiver un service"
+        });
+        return;
+    }
+
+    Swal.fire({
+        title: "Voulez-vous désactiver ce service ?",
+        html: `
+            <div style="text-align: left;">
+                <p>Êtes-vous sûr de vouloir désactiver le service :</p>
+                <p style="font-weight: bold; color: #dc3545; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                    "${nom || 'Ce service'}" (${article_budgetaire || ''})
+                </p>
+                <p class="text-muted small">Cette action va mettre à jour son statut en "inactif".</p>
+            </div>
+        `,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#d33",
+        cancelButtonColor: "#3085d6",
+        confirmButtonText: "Oui, désactiver",
+        cancelButtonText: "Annuler",
+        reverseButtons: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            axios
+                .delete(
+                    `${API_BASE_URL}/delete-article/${id}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                )
+                .then(() => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Désactivé !',
+                        text: "Service désactivé avec succès.",
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    
+                    // Rafraîchir la liste
+                    if (fetchArticles) {
+                        fetchArticles();
+                    }
+                })
+                .catch((error) => {
+                    console.error("Erreur lors de la désactivation:", error);
+                    
+                    // Gestion des erreurs
+                    if (error.response) {
+                        const { status, data } = error.response;
+                        
+                        switch (status) {
+                            case 403:
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Action non autorisée',
+                                    text: data.message || "Vous n'avez pas la permission de supprimer ce service",
+                                    timer: 3000
+                                });
+                                break;
+                                
+                            case 401:
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Session expirée',
+                                    text: data.message || 'Votre session a expiré. Veuillez vous reconnecter.',
+                                    timer: 3000
+                                }).then(() => {
+                                    localStorage.clear();
+                                    window.location.href = '/';
+                                });
+                                break;
+                                
+                            case 404:
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Non trouvé',
+                                    text: data.message || "Le service n'existe pas",
+                                    timer: 3000
+                                }).then(() => {
+                                    if (fetchArticles) {
+                                        fetchArticles();
+                                    }
+                                });
+                                break;
+                                
+                            case 422:
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Erreur de validation',
+                                    text: data.message || "Impossible de désactiver ce service",
+                                    timer: 3000
+                                });
+                                break;
+                                
+                            default:
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Erreur',
+                                    text: data.message || "Erreur lors de la désactivation",
+                                    timer: 3000
+                                });
+                        }
+                    } else if (error.request) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erreur réseau',
+                            text: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
+                            timer: 3000
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erreur',
+                            text: error.message || "Une erreur inattendue s'est produite",
+                            timer: 3000
+                        });
+                    }
+                });
+        }
+    });
+};
 
     const handlePageChange = (page) => {
         if (page >= 1 && page <= pagination.last_page) {

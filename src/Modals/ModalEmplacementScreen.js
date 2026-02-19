@@ -4,12 +4,14 @@ import Swal from 'sweetalert2';
 import { API_BASE_URL } from '../config';
 import GetTokenOrRedirect from '../Composant/getTokenOrRedirect';
 import { FaPlus, FaEdit, FaTimes, FaMapMarkerAlt } from 'react-icons/fa';
+import { useHistory } from 'react-router-dom/cjs/react-router-dom.min';
 
 const ModalEmplacementScreen = ({ isOpen, onClose, emplacementToEdit = null, onSuccess }) => {
   const [nomEmplacement, setNomEmplacement] = useState("");
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+   const history = useHistory();
 
   const token = GetTokenOrRedirect();
 
@@ -24,48 +26,189 @@ const ModalEmplacementScreen = ({ isOpen, onClose, emplacementToEdit = null, onS
     setErrors({});
   }, [emplacementToEdit]);
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
     e.preventDefault();
     setErrors({});
-    if (!token) return;
+    
+    // Vérification du token
+    if (!token) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Non authentifié',
+            text: "Vous n'êtes pas authentifié. Veuillez vous reconnecter."
+        });
+        return;
+    }
+
+    // Vérification des permissions
+    const userPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+    
+    if (isEditing && emplacementToEdit) {
+        if (!userPermissions.includes('modifier_emplacement')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Permission refusée',
+                text: "Vous n'avez pas la permission 'modifier emplacement' pour modifier un emplacement"
+            });
+            return;
+        }
+    } else {
+        if (!userPermissions.includes('creer_emplacement')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Permission refusée',
+                text: "Vous n'avez pas la permission 'créer emplacement' pour ajouter un emplacement"
+            });
+            return;
+        }
+    }
+
+    // Validation du nom de l'emplacement
+    if (!nomEmplacement || nomEmplacement.trim() === '') {
+        setErrors({ nom_emplacement: ["Veuillez saisir un nom d'emplacement"] });
+        Swal.fire({
+            icon: 'warning',
+            title: 'Validation',
+            text: "Le nom de l'emplacement est obligatoire",
+            timer: 2000
+        });
+        return;
+    }
 
     setLoading(true);
 
     try {
-      if (isEditing && emplacementToEdit) {
-        await axios.put(
-          `${API_BASE_URL}/emplacements/${emplacementToEdit.id}`,
-          { nom_emplacement: nomEmplacement },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        Swal.fire("Succès", "Emplacement modifié avec succès", "success");
-      } else {
-        await axios.post(
-          `${API_BASE_URL}/emplacements`,
-          { nom_emplacement: nomEmplacement },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        Swal.fire("Succès", "Emplacement ajouté avec succès", "success");
-      }
+        const payload = {
+            nom_emplacement: nomEmplacement.trim()
+        };
 
-      setNomEmplacement("");
-      setIsEditing(false);
-      
-      if (onSuccess) {
-        onSuccess();
-      }
-      
-      onClose();
+        if (isEditing && emplacementToEdit) {
+            // Route: PUT /emplacements/{id} avec middleware permission:modifier_emplacement
+            await axios.put(
+                `${API_BASE_URL}/emplacements/${emplacementToEdit.id}`,
+                payload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            Swal.fire({
+                title: "Succès",
+                text: "Emplacement modifié avec succès",
+                icon: "success",
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } else {
+            // Route: POST /emplacements avec middleware permission:creer_emplacement
+            await axios.post(
+                `${API_BASE_URL}/emplacements`,
+                payload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            Swal.fire({
+                title: "Succès",
+                text: "Emplacement ajouté avec succès",
+                icon: "success",
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+
+        // Réinitialisation après soumission
+        setNomEmplacement("");
+        setIsEditing(false);
+        
+        // Appeler le callback de succès
+        if (onSuccess) {
+            onSuccess();
+        }
+        
+        // Fermer le modal
+        onClose();
+        
     } catch (error) {
-      if (error.response?.data?.errors) {
-        setErrors(error.response.data.errors);
-      } else {
-        Swal.fire("Erreur", "Erreur lors de l'enregistrement", "error");
-      }
+        console.error('Erreur:', error);
+        
+        // Gestion des erreurs
+        if (error.response) {
+            const { status, data } = error.response;
+            
+            // Erreur 403 - Permission denied (middleware Laravel)
+            if (status === 403) {
+                const permission = isEditing ? 'modifier_emplacement' : 'creer_emplacement';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: data.message || `Vous n'avez pas la permission ${permission}`,
+                    timer: 3000
+                });
+            }
+            // Erreur 422 - Validation errors
+            else if (status === 422 && data.errors) {
+                setErrors(data.errors);
+                
+                // Afficher la première erreur
+                const firstError = Object.values(data.errors)[0]?.[0];
+                if (firstError) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Erreur de validation',
+                        text: firstError,
+                        timer: 3000
+                    });
+                }
+            }
+            // Erreur 401 - Non authentifié
+            else if (status === 401) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Session expirée',
+                    text: data.message || 'Votre session a expiré. Veuillez vous reconnecter.',
+                    timer: 3000
+                });
+                
+                setTimeout(() => {
+                    localStorage.clear();
+                    window.location.href = '/';
+                }, 3000);
+            }
+            // Erreur 404 - Non trouvé
+            else if (status === 404) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Non trouvé',
+                    text: data.message || "L'emplacement n'existe pas",
+                    timer: 3000
+                });
+            }
+            // Autres erreurs
+            else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: data.message || "Erreur lors de l'enregistrement",
+                    timer: 3000
+                });
+            }
+        } else if (error.request) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur réseau',
+                text: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
+                timer: 3000
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur',
+                text: error.message || "Une erreur inattendue s'est produite",
+                timer: 3000
+            });
+        }
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   const handleCancel = () => {
     setNomEmplacement("");

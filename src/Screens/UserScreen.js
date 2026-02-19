@@ -69,8 +69,13 @@ const UserScreen = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/mon-utilisateurs?page=${currentPage}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await axios.get(`${API_BASE_URL}/mon-utilisateurs`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          page: currentPage,
+          per_page: pagination.per_page,
+          search: search || undefined
+        }
       });
       
       console.log('API Response Users:', response.data);
@@ -366,7 +371,10 @@ const UserScreen = () => {
                   className="form-control border-left-0"
                   placeholder="Rechercher par nom, prénom ou email..."
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   disabled={loading}
                 />
               </div>
@@ -469,7 +477,7 @@ const UserScreen = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.length === 0 ? (
+                  {users.length === 0 ? (
                     <tr>
                       <td colSpan="8" className="text-center py-5">
                         <div className="py-4">
@@ -482,9 +490,9 @@ const UserScreen = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredUsers.map((user, index) => (
+                    users.map((user, index) => (
                       <tr key={user.id}>
-                        <td>{(currentPage - 1) * pagination.per_page + index + 1}</td>
+                        <td>{((currentPage - 1) * pagination.per_page) + index + 1}</td>
                         <td>
                           <strong>{user.nom || 'N/A'}</strong>
                         </td>
@@ -534,7 +542,7 @@ const UserScreen = () => {
           )}
         </div>
         
-        {/* Pagination */}
+        {/* Pagination - CORRIGÉE */}
         {!loading && pagination.last_page > 1 && (
           <div className="card-footer border-top">
             <div className="row align-items-center">
@@ -562,6 +570,7 @@ const UserScreen = () => {
                       const pageNum = i + 1;
                       const isCurrent = pageNum === currentPage;
                       
+                      // Afficher les pages pertinentes (première, dernière, et autour de la page courante)
                       if (
                         pageNum === 1 || 
                         pageNum === pagination.last_page || 
@@ -575,6 +584,13 @@ const UserScreen = () => {
                             >
                               {pageNum}
                             </button>
+                          </li>
+                        );
+                      } else if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+                        // Afficher des points de suspension
+                        return (
+                          <li key={pageNum} className="page-item disabled">
+                            <span className="page-link">...</span>
                           </li>
                         );
                       }
@@ -598,475 +614,379 @@ const UserScreen = () => {
         )}
       </div>
 
-      {/* Modal avec gestion des rôles */}
-     {showModal && (
-  <div 
-    className="modal fade show" 
-    style={{ 
-      display: 'block', 
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      backdropFilter: 'blur(4px)'
-    }} 
-    tabIndex="-1" 
-    role="dialog"
-  >
-    <div className="modal-dialog modal-dialog-centered modal-lg" role="document">
-      <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-        
-        {/* Header avec dégradé */}
+      {/* Modal */}
+      {showModal && (
         <div 
-          className="modal-header bg-gradient-primary text-white position-relative py-3 px-4" 
+          className="modal fade show" 
           style={{ 
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderBottom: 'none'
-          }}
+            display: 'block', 
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(4px)'
+          }} 
+          tabIndex="-1" 
+          role="dialog"
         >
-          <h5 className="modal-title mb-0 font-weight-bold d-flex align-items-center">
-            <div className="rounded-circle bg-white bg-opacity-25 p-2 mr-3 d-flex align-items-center justify-content-center">
-              {editingUser ? <FaUser className="text-white" size={18} /> : <FaUser className="text-white" size={18} />}
-            </div>
-            {editingUser ? 'Modifier l\'utilisateur' : 'Nouvel Utilisateur'}
-          </h5>
-          <button 
-            type="button" 
-            className="btn btn-sm btn-light position-absolute"
-            onClick={handleCloseModal}
-            disabled={submitting}
-            style={{
-              top: '12px',
-              right: '15px',
-              border: 'none',
-              fontSize: '1.2rem',
-              lineHeight: 1,
-              padding: '0.25rem 0.5rem',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1,
-              width: '32px',
-              height: '32px'
-            }}
-          >
-            <FaTimes />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body p-4" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-            
-            {/* Informations personnelles */}
-            <div className="mb-4">
-              <h6 className="font-weight-bold mb-3 d-flex align-items-center text-primary">
-                <FaUser className="mr-2" />
-                Informations personnelles
-              </h6>
+          <div className="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '16px', overflow: 'hidden' }}>
               
-              <div className="row">
-                <div className="col-md-6 mb-3">
-                  <div className="form-group">
-                    <label className="font-weight-bold mb-2">
-                      Nom <span className="text-danger">*</span>
-                    </label>
-                    <div className="input-group">
-                      <div className="input-group-prepend">
-                        <span className="input-group-text bg-light border-right-0">
-                          <FaUser className="text-primary" />
-                        </span>
-                      </div>
-                      <input
-                        type="text"
-                        className={`form-control border-left-0 ${errors.nom ? 'is-invalid' : ''}`}
-                        value={formData.nom}
-                        onChange={(e) => setFormData({...formData, nom: e.target.value})}
-                        disabled={submitting}
-                        placeholder="Entrez le nom"
-                        style={{ height: '45px' }}
-                      />
-                    </div>
-                    {renderFieldError('nom')}
+              {/* Header avec dégradé */}
+              <div 
+                className="modal-header bg-gradient-primary text-white position-relative py-3 px-4" 
+                style={{ 
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  borderBottom: 'none'
+                }}
+              >
+                <h5 className="modal-title mb-0 font-weight-bold d-flex align-items-center">
+                  <div className="rounded-circle bg-white bg-opacity-25 p-2 mr-3 d-flex align-items-center justify-content-center">
+                    {editingUser ? <FaUser className="text-white" size={18} /> : <FaUser className="text-white" size={18} />}
                   </div>
-                </div>
-
-                <div className="col-md-6 mb-3">
-                  <div className="form-group">
-                    <label className="font-weight-bold mb-2">Prénom</label>
-                    <div className="input-group">
-                      <div className="input-group-prepend">
-                        <span className="input-group-text bg-light border-right-0">
-                          <FaUser className="text-info" />
-                        </span>
-                      </div>
-                      <input
-                        type="text"
-                        className="form-control border-left-0"
-                        value={formData.prenom}
-                        onChange={(e) => setFormData({...formData, prenom: e.target.value})}
-                        disabled={submitting}
-                        placeholder="Entrez le prénom"
-                        style={{ height: '45px' }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Email */}
-            <div className="mb-4">
-              <h6 className="font-weight-bold mb-3 d-flex align-items-center text-primary">
-                <FaEnvelope className="mr-2" />
-                Contact
-              </h6>
-              
-              <div className="form-group">
-                <label className="font-weight-bold mb-2">
-                  Adresse email <span className="text-danger">*</span>
-                </label>
-                <div className="input-group">
-                  <div className="input-group-prepend">
-                    <span className="input-group-text bg-light border-right-0">
-                      <FaEnvelope className="text-primary" />
-                    </span>
-                  </div>
-                  <input
-                    type="email"
-                    className={`form-control border-left-0 ${errors.email ? 'is-invalid' : ''}`}
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    required
-                    disabled={!!editingUser || submitting}
-                    placeholder="exemple@email.com"
-                    style={{ height: '45px' }}
-                  />
-                </div>
-                {renderFieldError('email')}
-                {editingUser && (
-                  <small className="form-text text-muted mt-2">
-                    <FaCircle className="text-warning mr-1" size={8} />
-                    L'email ne peut pas être modifié
-                  </small>
-                )}
-              </div>
-            </div>
-
-            {/* Mot de passe */}
-            <div className="mb-4">
-              <h6 className="font-weight-bold mb-3 d-flex align-items-center text-primary">
-                <FaLock className="mr-2" />
-                Sécurité
-              </h6>
-              
-              <div className="form-group">
-                <label className="font-weight-bold mb-2">
-                  Mot de passe {!editingUser && <span className="text-danger">*</span>}
-                </label>
-                <div className="input-group">
-                  <div className="input-group-prepend">
-                    <span className="input-group-text bg-light border-right-0">
-                      <FaLock className="text-primary" />
-                    </span>
-                  </div>
-                  <input
-                    type="password"
-                    className={`form-control border-left-0 ${errors.password ? 'is-invalid' : ''}`}
-                    value={formData.password}
-                    onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    required={!editingUser}
-                    disabled={submitting}
-                    placeholder={editingUser ? "Laisser vide pour conserver le mot de passe actuel" : "Entrez le mot de passe"}
-                    style={{ height: '45px' }}
-                  />
-                </div>
-                {renderFieldError('password')}
-                {editingUser && (
-                  <small className="form-text text-muted mt-2">
-                    <FaCircle className="text-info mr-1" size={8} />
-                    Laissez vide pour ne pas modifier le mot de passe
-                  </small>
-                )}
-              </div>
-            </div>
-
-            {/* Statut */}
-            <div className="mb-4">
-              <h6 className="font-weight-bold mb-3 d-flex align-items-center text-primary">
-                <FaCircle className="mr-2" />
-                Statut
-              </h6>
-              
-              <div className="form-group">
-                <select
-                  className="form-control"
-                  value={formData.statut}
-                  onChange={(e) => setFormData({...formData, statut: e.target.value})}
+                  {editingUser ? 'Modifier l\'utilisateur' : 'Nouvel Utilisateur'}
+                </h5>
+                <button 
+                  type="button" 
+                  className="btn btn-sm btn-light position-absolute"
+                  onClick={handleCloseModal}
                   disabled={submitting}
-                  style={{ height: '45px' }}
+                  style={{
+                    top: '12px',
+                    right: '15px',
+                    border: 'none',
+                    fontSize: '1.2rem',
+                    lineHeight: 1,
+                    padding: '0.25rem 0.5rem',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1,
+                    width: '32px',
+                    height: '32px'
+                  }}
                 >
-                  <option value="active">Actif</option>
-                  <option value="inactive">Inactif</option>
-                  <option value="bloqué">Bloqué</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Section Rôles */}
-            <div className="mb-4">
-              <h6 className="font-weight-bold mb-3 d-flex align-items-center text-primary">
-                <FaUser className="mr-2" />
-                Rôles
-              </h6>
-              
-              {/* Sélecteur pour ajouter un rôle */}
-              <div className="mb-3">
-                <div className="input-group">
-                  <div className="input-group-prepend">
-                    <span className="input-group-text bg-light border-right-0">
-                      <FaPlus className="text-primary" />
-                    </span>
-                  </div>
-                  <select
-                    className="form-control border-left-0"
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        handleAddRole(e.target.value);
-                        e.target.value = '';
-                      }
-                    }}
-                    disabled={submitting}
-                    style={{ height: '45px' }}
-                  >
-                    <option value="">Ajouter un rôle...</option>
-                    {roles.map(role => (
-                      <option key={role.id} value={role.id}>
-                        {role.nom} - {role.description || 'Pas de description'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <FaTimes />
+                </button>
               </div>
 
-              {/* Liste des rôles sélectionnés */}
-              {formData.role_ids.length > 0 && (
-                <div className="selected-roles-container p-3 border rounded bg-light mb-3">
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h6 className="mb-0 font-weight-bold">
-                      Rôles attribués ({formData.role_ids.length})
+              <form onSubmit={handleSubmit}>
+                <div className="modal-body p-4" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                  
+                  {/* Informations personnelles */}
+                  <div className="mb-4">
+                    <h6 className="font-weight-bold mb-3 d-flex align-items-center text-primary">
+                      <FaUser className="mr-2" />
+                      Informations personnelles
                     </h6>
-                  </div>
-                  <div className="row">
-                    {formData.role_ids.map(roleId => {
-                      const role = roles.find(r => r.id === roleId);
-                      return role ? (
-                        <div key={roleId} className="col-md-6 mb-2">
-                          <div className="d-flex align-items-center justify-content-between p-2 border rounded bg-white shadow-sm">
-                            <div>
-                              <strong>{role.nom}</strong>
-                              {role.description && (
-                                <div className="text-muted small">
-                                  {role.description}
-                                </div>
-                              )}
+                    
+                    <div className="row">
+                      <div className="col-md-6 mb-3">
+                        <div className="form-group">
+                          <label className="font-weight-bold mb-2">
+                            Nom <span className="text-danger">*</span>
+                          </label>
+                          <div className="input-group">
+                            <div className="input-group-prepend">
+                              <span className="input-group-text bg-light border-right-0">
+                                <FaUser className="text-primary" />
+                              </span>
                             </div>
-                            <button 
-                              type="button"
-                              className="btn btn-sm btn-link text-danger p-0"
-                              onClick={() => handleRemoveRole(roleId)}
+                            <input
+                              type="text"
+                              className={`form-control border-left-0 ${errors.nom ? 'is-invalid' : ''}`}
+                              value={formData.nom}
+                              onChange={(e) => setFormData({...formData, nom: e.target.value})}
                               disabled={submitting}
-                              style={{ minWidth: '30px' }}
-                            >
-                              <FaTrash />
-                            </button>
+                              placeholder="Entrez le nom"
+                              style={{ height: '45px' }}
+                            />
+                          </div>
+                          {renderFieldError('nom')}
+                        </div>
+                      </div>
+
+                      <div className="col-md-6 mb-3">
+                        <div className="form-group">
+                          <label className="font-weight-bold mb-2">Prénom</label>
+                          <div className="input-group">
+                            <div className="input-group-prepend">
+                              <span className="input-group-text bg-light border-right-0">
+                                <FaUser className="text-info" />
+                              </span>
+                            </div>
+                            <input
+                              type="text"
+                              className="form-control border-left-0"
+                              value={formData.prenom}
+                              onChange={(e) => setFormData({...formData, prenom: e.target.value})}
+                              disabled={submitting}
+                              placeholder="Entrez le prénom"
+                              style={{ height: '45px' }}
+                            />
                           </div>
                         </div>
-                      ) : null;
-                    })}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {/* Liste de tous les rôles disponibles */}
-              <div>
-                <h6 className="mb-3 font-weight-bold">
-                  Tous les rôles disponibles ({roles.length})
-                </h6>
-                <div className="row" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                  {roles.map(role => (
-                    <div key={role.id} className="col-md-6 mb-2">
-                      <div className="d-flex align-items-center justify-content-between p-2 border rounded bg-white">
-                        <div>
-                          <div className="font-weight-bold">{role.nom}</div>
-                          {role.description && (
-                            <div className="text-muted small">
-                              {role.description}
-                            </div>
-                          )}
+                  {/* Email */}
+                  <div className="mb-4">
+                    <h6 className="font-weight-bold mb-3 d-flex align-items-center text-primary">
+                      <FaEnvelope className="mr-2" />
+                      Contact
+                    </h6>
+                    
+                    <div className="form-group">
+                      <label className="font-weight-bold mb-2">
+                        Adresse email <span className="text-danger">*</span>
+                      </label>
+                      <div className="input-group">
+                        <div className="input-group-prepend">
+                          <span className="input-group-text bg-light border-right-0">
+                            <FaEnvelope className="text-primary" />
+                          </span>
                         </div>
-                        <button
-                          type="button"
-                          className={`btn btn-sm ${formData.role_ids.includes(role.id) ? 'btn-success' : 'btn-outline-primary'}`}
-                          onClick={() => {
-                            if (formData.role_ids.includes(role.id)) {
-                              handleRemoveRole(role.id);
-                            } else {
-                              handleAddRole(role.id);
+                        <input
+                          type="email"
+                          className={`form-control border-left-0 ${errors.email ? 'is-invalid' : ''}`}
+                          value={formData.email}
+                          onChange={(e) => setFormData({...formData, email: e.target.value})}
+                          required
+                          disabled={!!editingUser || submitting}
+                          placeholder="exemple@email.com"
+                          style={{ height: '45px' }}
+                        />
+                      </div>
+                      {renderFieldError('email')}
+                      {editingUser && (
+                        <small className="form-text text-muted mt-2">
+                          <FaCircle className="text-warning mr-1" size={8} />
+                          L'email ne peut pas être modifié
+                        </small>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mot de passe */}
+                  <div className="mb-4">
+                    <h6 className="font-weight-bold mb-3 d-flex align-items-center text-primary">
+                      <FaLock className="mr-2" />
+                      Sécurité
+                    </h6>
+                    
+                    <div className="form-group">
+                      <label className="font-weight-bold mb-2">
+                        Mot de passe {!editingUser && <span className="text-danger">*</span>}
+                      </label>
+                      <div className="input-group">
+                        <div className="input-group-prepend">
+                          <span className="input-group-text bg-light border-right-0">
+                            <FaLock className="text-primary" />
+                          </span>
+                        </div>
+                        <input
+                          type="password"
+                          className={`form-control border-left-0 ${errors.password ? 'is-invalid' : ''}`}
+                          value={formData.password}
+                          onChange={(e) => setFormData({...formData, password: e.target.value})}
+                          required={!editingUser}
+                          disabled={submitting}
+                          placeholder={editingUser ? "Laisser vide pour conserver le mot de passe actuel" : "Entrez le mot de passe"}
+                          style={{ height: '45px' }}
+                        />
+                      </div>
+                      {renderFieldError('password')}
+                      {editingUser && (
+                        <small className="form-text text-muted mt-2">
+                          <FaCircle className="text-info mr-1" size={8} />
+                          Laissez vide pour ne pas modifier le mot de passe
+                        </small>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Statut */}
+                  <div className="mb-4">
+                    <h6 className="font-weight-bold mb-3 d-flex align-items-center text-primary">
+                      <FaCircle className="mr-2" />
+                      Statut
+                    </h6>
+                    
+                    <div className="form-group">
+                      <select
+                        className="form-control"
+                        value={formData.statut}
+                        onChange={(e) => setFormData({...formData, statut: e.target.value})}
+                        disabled={submitting}
+                        style={{ height: '45px' }}
+                      >
+                        <option value="active">Actif</option>
+                        <option value="inactive">Inactif</option>
+                        <option value="bloqué">Bloqué</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Section Rôles */}
+                  <div className="mb-4">
+                    <h6 className="font-weight-bold mb-3 d-flex align-items-center text-primary">
+                      <FaUser className="mr-2" />
+                      Rôles
+                    </h6>
+                    
+                    {/* Sélecteur pour ajouter un rôle */}
+                    <div className="mb-3">
+                      <div className="input-group">
+                        <div className="input-group-prepend">
+                          <span className="input-group-text bg-light border-right-0">
+                            <FaPlus className="text-primary" />
+                          </span>
+                        </div>
+                        <select
+                          className="form-control border-left-0"
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleAddRole(e.target.value);
+                              e.target.value = '';
                             }
                           }}
                           disabled={submitting}
-                          style={{ minWidth: '70px' }}
+                          style={{ height: '45px' }}
                         >
-                          {formData.role_ids.includes(role.id) ? (
-                            <>
-                              <FaCheck className="mr-1" size={10} />
-                              Ajouté
-                            </>
-                          ) : (
-                            'Ajouter'
-                          )}
-                        </button>
+                          <option value="">Ajouter un rôle...</option>
+                          {roles.map(role => (
+                            <option key={role.id} value={role.id}>
+                              {role.nom} - {role.description || 'Pas de description'}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
-                  ))}
+
+                    {/* Liste des rôles sélectionnés */}
+                    {formData.role_ids.length > 0 && (
+                      <div className="selected-roles-container p-3 border rounded bg-light mb-3">
+                        <div className="d-flex justify-content-between align-items-center mb-3">
+                          <h6 className="mb-0 font-weight-bold">
+                            Rôles attribués ({formData.role_ids.length})
+                          </h6>
+                        </div>
+                        <div className="row">
+                          {formData.role_ids.map(roleId => {
+                            const role = roles.find(r => r.id === roleId);
+                            return role ? (
+                              <div key={roleId} className="col-md-6 mb-2">
+                                <div className="d-flex align-items-center justify-content-between p-2 border rounded bg-white shadow-sm">
+                                  <div>
+                                    <strong>{role.nom}</strong>
+                                    {role.description && (
+                                      <div className="text-muted small">
+                                        {role.description}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <button 
+                                    type="button"
+                                    className="btn btn-sm btn-link text-danger p-0"
+                                    onClick={() => handleRemoveRole(roleId)}
+                                    disabled={submitting}
+                                    style={{ minWidth: '30px' }}
+                                  >
+                                    <FaTrash />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Liste de tous les rôles disponibles */}
+                    <div>
+                      <h6 className="mb-3 font-weight-bold">
+                        Tous les rôles disponibles ({roles.length})
+                      </h6>
+                      <div className="row" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                        {roles.map(role => (
+                          <div key={role.id} className="col-md-6 mb-2">
+                            <div className="d-flex align-items-center justify-content-between p-2 border rounded bg-white">
+                              <div>
+                                <div className="font-weight-bold">{role.nom}</div>
+                                {role.description && (
+                                  <div className="text-muted small">
+                                    {role.description}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                className={`btn btn-sm ${formData.role_ids.includes(role.id) ? 'btn-success' : 'btn-outline-primary'}`}
+                                onClick={() => {
+                                  if (formData.role_ids.includes(role.id)) {
+                                    handleRemoveRole(role.id);
+                                  } else {
+                                    handleAddRole(role.id);
+                                  }
+                                }}
+                                disabled={submitting}
+                                style={{ minWidth: '70px' }}
+                              >
+                                {formData.role_ids.includes(role.id) ? (
+                                  <>
+                                    <FaCheck className="mr-1" size={10} />
+                                    Ajouté
+                                  </>
+                                ) : (
+                                  'Ajouter'
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+
+                {/* Footer */}
+                <div className="modal-footer border-0 bg-light py-3 px-4">
+                  <button 
+                    type="button" 
+                    className="btn btn-light px-4" 
+                    onClick={handleCloseModal}
+                    disabled={submitting}
+                    style={{ borderRadius: '8px', height: '45px' }}
+                  >
+                    Annuler
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary px-4"
+                    disabled={submitting}
+                    style={{ 
+                      borderRadius: '8px', 
+                      height: '45px',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      border: 'none'
+                    }}
+                  >
+                    {submitting ? (
+                      <>
+                        <FaSpinner className="fa-spin mr-2" />
+                        {editingUser ? 'Mise à jour...' : 'Création...'}
+                      </>
+                    ) : (
+                      editingUser ? 'Mettre à jour' : 'Créer l\'utilisateur'
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Footer */}
-          <div className="modal-footer border-0 bg-light py-3 px-4">
-            <button 
-              type="button" 
-              className="btn btn-light px-4" 
-              onClick={handleCloseModal}
-              disabled={submitting}
-              style={{ borderRadius: '8px', height: '45px' }}
-            >
-              Annuler
-            </button>
-            <button 
-              type="submit" 
-              className="btn btn-primary px-4"
-              disabled={submitting}
-              style={{ 
-                borderRadius: '8px', 
-                height: '45px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                border: 'none'
-              }}
-            >
-              {submitting ? (
-                <>
-                  <FaSpinner className="fa-spin mr-2" />
-                  {editingUser ? 'Mise à jour...' : 'Création...'}
-                </>
-              ) : (
-                editingUser ? 'Mettre à jour' : 'Créer l\'utilisateur'
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <style jsx>{`
-      .modal-content {
-        border-radius: 16px;
-        animation: modalFadeIn 0.3s ease;
-      }
-      
-      @keyframes modalFadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(-20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-      
-      .modal-header {
-        border-radius: 16px 16px 0 0;
-      }
-      
-      .selected-roles-container {
-        max-height: 250px;
-        overflow-y: auto;
-        border-radius: 12px;
-      }
-      
-      .input-group-text {
-        border-radius: 10px 0 0 10px;
-        background-color: #f8f9fa;
-      }
-      
-      .form-control {
-        border-radius: 0 10px 10px 0;
-        border: 1px solid #e0e0e0;
-      }
-      
-      .form-control:focus {
-        border-color: #667eea;
-        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
-      }
-      
-      .btn {
-        transition: all 0.2s ease;
-      }
-      
-      .btn:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-      }
-      
-      .bg-opacity-25 {
-        opacity: 0.25;
-      }
-      
-      .bg-gradient-primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      }
-      
-      .btn-outline-primary {
-        border-color: #667eea;
-        color: #667eea;
-      }
-      
-      .btn-outline-primary:hover {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-color: transparent;
-        color: white;
-      }
-      
-      .btn-success {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        border: none;
-      }
-      
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
-      
-      ::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-      }
-      
-      ::-webkit-scrollbar-thumb {
-        background: #c1c1c1;
-        border-radius: 10px;
-      }
-      
-      ::-webkit-scrollbar-thumb:hover {
-        background: #a8a8a8;
-      }
-      
-      @media (max-width: 768px) {
-        .modal-dialog {
-          margin: 20px auto;
-          width: 95%;
-        }
-      }
+      <style>{`
         .users-container {
           padding: 20px;
           background: #f8f9fa;
@@ -1127,6 +1047,26 @@ const UserScreen = () => {
           font-size: 0.875rem;
         }
         
+        .page-link {
+          border-radius: 8px;
+          margin: 0 3px;
+          color: #007bff;
+          border: 1px solid #dee2e6;
+          padding: 0.5rem 0.75rem;
+        }
+        
+        .page-item.active .page-link {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-color: transparent;
+          color: white;
+        }
+        
+        .page-item.disabled .page-link {
+          color: #6c757d;
+          pointer-events: none;
+          background: #f8f9fa;
+        }
+        
         @media (max-width: 768px) {
           .users-container {
             padding: 15px;
@@ -1145,19 +1085,7 @@ const UserScreen = () => {
             width: 95%;
           }
         }
-    `}</style>
-  </div>
-)}
-
-
-
-
-
-
-
-
-
-   
+      `}</style>
     </div>
   );
 };

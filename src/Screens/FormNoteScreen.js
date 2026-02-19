@@ -4,7 +4,7 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import Head from "../Composant/Head";
 import Menus from "../Composant/Menus";
-import FormNote from "../Composant/FormNote";
+import FormNote from "../Composant/FormNote"; // Changé de FormDocument à FormNote
 import { API_BASE_URL } from "../config";
 import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
 import { FaArrowLeft, FaFileAlt, FaSpinner } from 'react-icons/fa';
@@ -179,16 +179,20 @@ const FormNoteScreen = () => {
 
                 <section className="content">
                     <div className="container-fluid">
-                        <FormNote
-                            isEditing={isEditing}
-                            noteToEdit={noteToEdit}
-                            onCancel={handleCancel}
-                            onSuccess={handleSuccess}
-                            directions={directions}
-                            classeurs={classeurs}
-                            centres={centres}
-                            emplacements={emplacements}
-                        />
+                        <div className="row">
+                            <div className="col-md-12">
+                                <FormNote
+                                    isEditing={isEditing}
+                                    noteToEdit={noteToEdit} // Changé de documentToEdit à noteToEdit
+                                    onCancel={handleCancel}
+                                    onSuccess={handleSuccess}
+                                    directions={directions}
+                                    classeurs={classeurs}
+                                    centres={centres} // Ajouté centres qui était manquant
+                                    emplacements={emplacements}
+                                />
+                            </div>
+                        </div>
                     </div>
                 </section>
             </div>

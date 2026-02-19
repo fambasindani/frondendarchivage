@@ -40,7 +40,8 @@ import Head from "../Composant/Head";
 import Menus from "../Composant/Menus";
 
 const ProfilScreen = () => {
-  const { id } = useParams();
+  const utilisateur = JSON.parse(localStorage.getItem("utilisateur")) || {};
+  const id = utilisateur?.id || "";
   const history = useHistory();
   const token = GetTokenOrRedirect();
   

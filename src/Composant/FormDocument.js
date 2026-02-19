@@ -799,7 +799,7 @@ const FormDocument = ({
                                                 <div className="col-md-4 mb-3">
                                                     <div className="form-group">
                                                         <label className="font-weight-bold">
-                                                            Numéro Déclaration <span className="text-danger">*</span>
+                                                           Numéro Référence Interne <span className="text-danger">*</span>
                                                         </label>
                                                         <input
                                                             name="num_declaration"

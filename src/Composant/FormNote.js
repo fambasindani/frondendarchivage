@@ -24,6 +24,8 @@ import {
 import FileUploadModal from "../Modals/FileUploadModal";
 import Droplist from "../Composant/DropList ";
 import Input from "../Composant/Input";
+import ModalNote from "../Modals/ModalNote";
+import ModalAssujetti from "../Modals/ModalAssujetti";
 
 const FormNote = ({
     isEditing = false,
@@ -55,15 +57,44 @@ const FormNote = ({
     const [loading, setLoading] = useState(false);
     const [filePreviews, setFilePreviews] = useState([]);
     const [activeSection, setActiveSection] = useState(1);
-    
+
     // États pour le modal d'upload
     const [showFileUploadModal, setShowFileUploadModal] = useState(false);
     const [createdNoteId, setCreatedNoteId] = useState(null);
     const [noteSubmitted, setNoteSubmitted] = useState(false);
     const [selectedNom, setSelectedNom] = useState(null);
-    
+
     // Modal pour sélectionner l'assujetti
     const [showAssujettiModal, setShowAssujettiModal] = useState(false);
+
+    // Modal documents
+    const [isModalNoteOpen, setIsModalNoteOpen] = useState(false);
+    const [selectedId, setSelectedId] = useState(null);
+    const [monprojet, setmonprojet] = useState(null);
+    const [idclasseur, setidclasseur] = useState(null);
+    const [idcentre, setidcentre] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const ouvrirModalAvecId = (item) => {
+        setSelectedId(item.id);
+        setmonprojet(item.assujetti.nom_raison_sociale);
+        setidclasseur(item.id_classeur);
+        setidcentre(item.id_centre_ordonnancement);
+        setIsModalNoteOpen(true);
+    };
+
+    const handleOpenModal = () => {
+        setIsModalOpen(true);
+    };
+
+    // Effet pour surveiller les changements (débogage)
+    useEffect(() => {
+        console.log("=== ÉTAT ACTUEL ===");
+        console.log("showFileUploadModal:", showFileUploadModal);
+        console.log("createdNoteId:", createdNoteId);
+        console.log("noteSubmitted:", noteSubmitted);
+        console.log("==================");
+    }, [showFileUploadModal, createdNoteId, noteSubmitted]);
 
     // Initialiser les données
     useEffect(() => {
@@ -77,14 +108,14 @@ const FormNote = ({
                     (noteToEdit.date_enregistrement.split('T')[0] || "") : "",
                 id_classeur: noteToEdit.id_classeur ? noteToEdit.id_classeur.toString() : "",
                 id_user: id_user,
-                id_centre_ordonnancement: noteToEdit.id_centre_ordonnancement ? 
+                id_centre_ordonnancement: noteToEdit.id_centre_ordonnancement ?
                     noteToEdit.id_centre_ordonnancement.toString() : "",
                 id_assujetti: noteToEdit.id_assujetti ? noteToEdit.id_assujetti.toString() : "",
                 id_emplacement: noteToEdit.id_emplacement ? noteToEdit.id_emplacement.toString() : "",
             };
-            
+
             setFormData(data);
-            
+
             // Récupérer le nom de l'assujetti
             if (noteToEdit.assujetti) {
                 setSelectedNom({
@@ -92,7 +123,7 @@ const FormNote = ({
                     nom_raison_sociale: noteToEdit.assujetti.nom_raison_sociale
                 });
             }
-            
+
             // Charger les fichiers existants
             if (noteToEdit.id) {
                 fetchExistingFiles(noteToEdit.id);
@@ -125,7 +156,7 @@ const FormNote = ({
                 `${API_BASE_URL}/documents/${noteId}/files`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            
+
             if (response.data && response.data.files) {
                 const existingFilesPreviews = response.data.files.map(file => ({
                     id: file.id,
@@ -157,15 +188,18 @@ const FormNote = ({
         setShowAssujettiModal(false);
     };
 
+    const selectnom = (assujetti) => {
+        setSelectedNom(assujetti);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (!token) {
             Swal.fire('Erreur', 'Session expirée', 'error');
             return;
         }
 
-        // Vérification de l'assujetti
         if (!selectedNom) {
             Swal.fire({
                 icon: 'error',
@@ -175,7 +209,6 @@ const FormNote = ({
             return;
         }
 
-        // Validation des champs obligatoires
         const validationErrors = {};
         const requiredFields = [
             'id_ministere', 'numero_serie', 'date_ordonnancement',
@@ -213,44 +246,104 @@ const FormNote = ({
                 id_user: parseInt(id_user)
             };
 
+            console.log("=== SUBMIT NOTE ===");
+            console.log("Données à envoyer:", dataToSend);
+
             if (isEditing) {
+                // MODE ÉDITION
                 response = await axios.put(
                     `${API_BASE_URL}/notes/${noteToEdit.id}`,
                     dataToSend,
                     { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
                 );
+
+                console.log("Réponse édition:", response.data);
+                
                 setCreatedNoteId(noteToEdit.id);
+                setNoteSubmitted(true);
+                setShowFileUploadModal(true);
+
             } else {
+                // MODE CRÉATION
                 response = await axios.post(
                     `${API_BASE_URL}/notes`,
                     dataToSend,
                     { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
                 );
-                setCreatedNoteId(response.data.id);
+
+                console.log("Réponse création:", response.data);
+                
+                // La réponse API ne contient que le message, pas l'ID
+                // On doit récupérer la dernière note créée par l'utilisateur
+                
+                try {
+                    // Récupérer les notes triées par ID décroissant (la plus récente en premier)
+                    const notesResponse = await axios.get(
+                        `${API_BASE_URL}/notes?page=1`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                    
+                    console.log("Liste des notes:", notesResponse.data);
+                    
+                    if (notesResponse.data && notesResponse.data.data && notesResponse.data.data.length > 0) {
+                        // Trier par ID descendant pour prendre le plus récent
+                        const sortedNotes = notesResponse.data.data.sort((a, b) => b.id - a.id);
+                        const lastNoteId = sortedNotes[0].id;
+                        
+                        console.log("ID de la dernière note trouvée:", lastNoteId);
+                        
+                        setCreatedNoteId(lastNoteId);
+                        setNoteSubmitted(true);
+                        setShowFileUploadModal(true);
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Note créée !',
+                            text: 'Vous pouvez maintenant ajouter des fichiers',
+                            timer: 3000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        console.error("Aucune note trouvée");
+                        
+                        // Fallback: on affiche quand même le succès mais sans upload
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Note créée !',
+                            text: 'La note a été créée avec succès',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            if (onSuccess) onSuccess();
+                        });
+                    }
+                } catch (error) {
+                    console.error("Erreur lors de la récupération de la dernière note:", error);
+                    
+                    // En cas d'erreur, on ferme quand même
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Note créée !',
+                        text: 'La note a été créée avec succès',
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => {
+                        if (onSuccess) onSuccess();
+                    });
+                }
             }
-
-            setNoteSubmitted(true);
-            setShowFileUploadModal(true);
-
-            Swal.fire({
-                icon: 'success',
-                title: isEditing ? 'Note modifiée !' : 'Note créée !',
-                text: 'Vous pouvez maintenant ajouter des fichiers',
-                timer: 3000,
-                showConfirmButton: false
-            });
 
         } catch (error) {
             console.error('Erreur:', error);
             if (error.response?.data?.errors) {
                 setErrors(error.response.data.errors);
-                
+
                 let errorMessage = 'Veuillez corriger les erreurs :<br><ul>';
                 Object.keys(error.response.data.errors).forEach(field => {
                     errorMessage += `<li><strong>${getFieldLabel(field)}</strong>: ${error.response.data.errors[field].join(', ')}</li>`;
                 });
                 errorMessage += '</ul>';
-                
+
                 Swal.fire({
                     icon: 'error',
                     title: 'Erreur de validation',
@@ -269,6 +362,8 @@ const FormNote = ({
     };
 
     const handleFilesUploadComplete = (uploadedFiles) => {
+        console.log("Upload terminé, fichiers:", uploadedFiles);
+
         const newFilePreviews = uploadedFiles.map(file => ({
             id: file.id || Date.now(),
             name: file.name,
@@ -278,9 +373,10 @@ const FormNote = ({
             status: 'uploaded',
             fileId: file.id
         }));
-        
+
         setFilePreviews(prev => [...prev, ...newFilePreviews]);
-        
+        setShowFileUploadModal(false);
+
         Swal.fire({
             icon: 'success',
             title: 'Fichiers ajoutés',
@@ -288,15 +384,14 @@ const FormNote = ({
             timer: 2000,
             showConfirmButton: false
         });
-        
-        setShowFileUploadModal(false);
-        
+
         if (!isEditing && onSuccess) {
             setTimeout(() => onSuccess(), 500);
         }
     };
 
     const handleFilesUploadCancel = () => {
+        console.log("Annulation upload");
         setShowFileUploadModal(false);
         if (!isEditing) {
             Swal.fire({
@@ -312,7 +407,7 @@ const FormNote = ({
 
     const handleRemoveFile = async (index) => {
         const fileToRemove = filePreviews[index];
-        
+
         Swal.fire({
             title: 'Supprimer ce fichier ?',
             text: `Êtes-vous sûr de vouloir supprimer "${fileToRemove.name}" ?`,
@@ -382,24 +477,24 @@ const FormNote = ({
 
     return (
         <div className="container-fluid px-0">
-            {/* Modal d'upload */}
-            {showFileUploadModal && createdNoteId && (
-                <FileUploadModal
-                    documentId={createdNoteId}
-                    id_classeur={formData.id_classeur}
-                    onClose={handleFilesUploadCancel}
-                    onUploadComplete={handleFilesUploadComplete}
-                    token={token}
-                    existingFiles={filePreviews}
-                />
-            )}
-
-            {/* Modal Assujetti (à créer si nécessaire) */}
-            {/* <ModalAssujetti 
-                isOpen={showAssujettiModal} 
-                selectnom={selectAssujetti} 
-                onClose={() => setShowAssujettiModal(false)} 
-            /> */}
+            {/* Panneau de débogage */}
+          {/*   <div style={{
+                position: 'fixed',
+                top: 10,
+                right: 10,
+                background: 'rgba(0,0,0,0.8)',
+                color: 'white',
+                padding: 10,
+                borderRadius: 5,
+                zIndex: 10000,
+                fontSize: 12
+            }}>
+                <strong>DEBUG NOTE</strong><br/>
+                showModal: {showFileUploadModal ? '✅' : '❌'}<br/>
+                noteId: {createdNoteId || 'null'}<br/>
+                submitted: {noteSubmitted ? '✅' : '❌'}<br/>
+                files: {filePreviews.length}
+            </div> */}
 
             {/* En-tête fixe */}
             <div className="sticky-top bg-white shadow-sm border-bottom">
@@ -411,8 +506,8 @@ const FormNote = ({
                                 {isEditing ? "Modifier la Note" : "Nouvelle Note de Perception"}
                             </h4>
                             <small className="text-muted">
-                                {isEditing 
-                                    ? "Modifiez les informations de la note" 
+                                {isEditing
+                                    ? "Modifiez les informations de la note"
                                     : "Remplissez le formulaire pour ajouter une nouvelle note"}
                             </small>
                         </div>
@@ -559,8 +654,8 @@ const FormNote = ({
                                                         <button
                                                             type="button"
                                                             className="btn btn-outline-primary"
-                                                            onClick={() => setShowAssujettiModal(true)}
                                                             disabled={loading || noteSubmitted}
+                                                            onClick={handleOpenModal}
                                                         >
                                                             Choisir
                                                         </button>
@@ -630,7 +725,6 @@ const FormNote = ({
                                                         value={formData.date_ordonnancement}
                                                         onChange={handleChange}
                                                         className={`form-control ${errors.date_ordonnancement ? 'is-invalid' : ''}`}
-                                                        // SUPPRIMÉ: max={getTodayDate()}
                                                         disabled={loading || noteSubmitted}
                                                     />
                                                     <div className="input-group-append">
@@ -662,7 +756,6 @@ const FormNote = ({
                                                         value={formData.date_enregistrement}
                                                         onChange={handleChange}
                                                         className={`form-control ${errors.date_enregistrement ? 'is-invalid' : ''}`}
-                                                        // SUPPRIMÉ: max={getTodayDate()}
                                                         disabled={loading || noteSubmitted}
                                                     />
                                                     <div className="input-group-append">
@@ -802,7 +895,13 @@ const FormNote = ({
                                     <button
                                         type="button"
                                         className="btn btn-outline-primary"
-                                        onClick={() => setShowFileUploadModal(true)}
+                                        onClick={() => {
+                                            console.log("Clic sur Ajouter des fichiers");
+                                            console.log("showFileUploadModal avant:", showFileUploadModal);
+                                            console.log("createdNoteId:", createdNoteId);
+                                            setShowFileUploadModal(true);
+                                            console.log("showFileUploadModal après:", true);
+                                        }}
                                     >
                                         <FaPaperclip className="mr-2" /> Ajouter des fichiers
                                     </button>
@@ -812,6 +911,21 @@ const FormNote = ({
                     </div>
                 </div>
             </div>
+
+            {/* Modals */}
+            <ModalAssujetti isOpen={isModalOpen} selectnom={selectnom} onClose={() => setIsModalOpen(false)} />
+
+            {/* Modal d'upload */}
+            {showFileUploadModal && createdNoteId && (
+                <FileUploadModal
+                    documentId={createdNoteId}
+                    id_classeur={formData.id_classeur}
+                    onClose={handleFilesUploadCancel}
+                    onUploadComplete={handleFilesUploadComplete}
+                    token={token}
+                    existingFiles={filePreviews}
+                />
+            )}
 
             <style jsx>{`
                 .animate-section {

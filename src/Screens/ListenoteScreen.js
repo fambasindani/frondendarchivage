@@ -25,6 +25,7 @@ import {
   FaEllipsisV,
   FaInfoCircle
 } from "react-icons/fa";
+import DocumentModal from "../Modals/DocumentModal";
 
 const ListenoteScreen = () => {
   const token = GetTokenOrRedirect();
@@ -43,6 +44,7 @@ const ListenoteScreen = () => {
   const [selectedId, setSelectedId] = useState(null);
   const [monProjet, setMonProjet] = useState(null);
   const [idclasseur, setIdClasseur] = useState(null);
+  const [openDropdownId, setOpenDropdownId] = useState(null);
 
   const [documentNom] = useState("Liste des notes de perception");
 
@@ -84,6 +86,17 @@ const ListenoteScreen = () => {
       description: "Date du jour"
     }
   ]);
+
+  // Fermer le dropdown quand on clique ailleurs
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setOpenDropdownId(null);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
 
   // Mettre à jour les stats quand item change
   useEffect(() => {
@@ -233,52 +246,94 @@ const ListenoteScreen = () => {
     }
   };
 
-  // Menu déroulant des actions
+  // Fonction pour gérer l'ouverture/fermeture du dropdown
+  const toggleDropdown = (id, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpenDropdownId(openDropdownId === id ? null : id);
+  };
+
+  // Menu déroulant des actions - Version corrigée avec état
   const ActionDropdown = ({ row }) => (
-    <div className="dropdown">
+    <div className="dropdown" style={{ position: 'relative' }}>
       <button 
-        className="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center"
-        type="button" 
-        data-toggle="dropdown"
-        style={{ minWidth: '40px', borderRadius: '8px' }}
+        className="btn btn-sm btn-light border d-flex align-items-center justify-content-center"
+        type="button"
+        onClick={(e) => toggleDropdown(row.id, e)}
+        style={{ 
+          width: '40px',
+          height: '38px',
+          borderRadius: '8px',
+          backgroundColor: openDropdownId === row.id ? '#e9ecef' : 'white',
+          border: '1px solid #dee2e6',
+          outline: 'none'
+        }}
       >
         <FaEllipsisV />
       </button>
-      <div className="dropdown-menu dropdown-menu-right shadow-lg border-0" style={{ minWidth: '200px', borderRadius: '12px' }}>
-        <h6 className="dropdown-header text-uppercase text-muted font-weight-bold small">
-          Actions
-        </h6>
-        <button 
-          className="dropdown-item d-flex align-items-center"
-          onClick={() => {
-            Swal.fire({
-              title: `Note N° ${row.numero_serie}`,
-              html: `
-                <div class="text-left">
-                  <p><strong>N° Série:</strong> ${row.numero_serie || 'N/A'}</p>
-                  <p><strong>Date Ordonnancement:</strong> ${formatDate(row.date_ordonnancement)}</p>
-                  <p><strong>Centre:</strong> ${row.centre?.nom || centreInfo?.nom || 'N/A'}</p>
-                  <p><strong>Assujetti:</strong> ${row.assujetti?.nom_raison_sociale || 'N/A'}</p>
-                  <p><strong>Classeur:</strong> ${row.classeur?.nom_classeur || 'N/A'}</p>
-                  <p><strong>Emplacement:</strong> ${row.emplacement?.nom_emplacement || 'N/A'}</p>
-                </div>
-              `,
-              icon: 'info',
-              confirmButtonColor: '#3085d6'
-            });
+      
+      {openDropdownId === row.id && (
+        <div 
+          className="dropdown-menu show" 
+          style={{ 
+            position: 'absolute', 
+            right: 0,
+            top: '100%',
+            zIndex: 9999,
+            minWidth: '200px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+            border: 'none',
+            marginTop: '5px',
+            padding: '8px 0',
+            backgroundColor: 'white'
           }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <FaInfoCircle className="mr-3 text-info" />
-          <span>Détails</span>
-        </button>
-        <button 
-          className="dropdown-item d-flex align-items-center"
-          onClick={() => ouvrirModalAvecId(row)}
-        >
-          <FaFilePdf className="mr-3 text-danger" />
-          <span>PDF</span>
-        </button>
-      </div>
+          <h6 className="dropdown-header text-uppercase text-muted font-weight-bold small px-3 py-2">
+            Actions
+          </h6>
+          <button 
+            className="dropdown-item d-flex align-items-center px-3 py-2"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpenDropdownId(null);
+              Swal.fire({
+                title: `Note N° ${row.numero_serie}`,
+                html: `
+                  <div class="text-left" style="max-height: 400px; overflow-y: auto;">
+                    <p><strong>N° Série:</strong> ${row.numero_serie || 'N/A'}</p>
+                    <p><strong>Date Ordonnancement:</strong> ${formatDate(row.date_ordonnancement)}</p>
+                    <p><strong>Centre:</strong> ${row.centre?.nom || centreInfo?.nom || 'N/A'}</p>
+                    <p><strong>Assujetti:</strong> ${row.assujetti?.nom_raison_sociale || 'N/A'}</p>
+                    <p><strong>Classeur:</strong> ${row.classeur?.nom_classeur || 'N/A'}</p>
+                    <p><strong>Emplacement:</strong> ${row.emplacement?.nom_emplacement || 'N/A'}</p>
+                  </div>
+                `,
+                icon: 'info',
+                confirmButtonText: 'Fermer',
+                confirmButtonColor: '#3085d6'
+              });
+            }}
+          >
+            <FaInfoCircle className="mr-3 text-info" size={16} />
+            <span>Détails</span>
+          </button>
+          <button 
+            className="dropdown-item d-flex align-items-center px-3 py-2"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpenDropdownId(null);
+              ouvrirModalAvecId(row);
+            }}
+          >
+            <FaFilePdf className="mr-3 text-danger" size={16} />
+            <span>PDF</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -575,7 +630,7 @@ const ListenoteScreen = () => {
       </div>
 
       {/* Modal pour afficher le PDF */}
-      <ModalNote
+      {/* <ModalNote
         modalId="documentModal"
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -583,7 +638,18 @@ const ListenoteScreen = () => {
         projet={monProjet}
         idclasseur={idclasseur}
         verification={false}
-      />
+      /> */}
+
+        <DocumentModal
+                modalId="documentModal"
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                monid={selectedId}
+                //projet={monprojet}
+                projet={monProjet}
+                idclasseur={idclasseur}
+                verification={false}
+            />
 
       {/* Styles CSS */}
       <style jsx>{`
@@ -657,13 +723,25 @@ const ListenoteScreen = () => {
         }
         
         .dropdown-menu {
-          border-radius: 12px;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+          animation: fadeIn 0.2s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
         
         .dropdown-item {
           padding: 0.75rem 1.5rem;
           font-size: 0.9rem;
+          cursor: pointer;
+          transition: all 0.2s;
         }
         
         .dropdown-item:hover {

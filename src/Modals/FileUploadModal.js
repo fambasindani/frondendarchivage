@@ -54,6 +54,7 @@ const FileUploadModal = ({
         console.log("=== FILE UPLOAD MODAL PROPS ===");
         console.log("documentId:", documentId);
         console.log("id_classeur:", id_classeur);
+       
         console.log("token présent:", !!token);
     }, [documentId, id_classeur, token]);
 
@@ -118,7 +119,7 @@ const FileUploadModal = ({
                     name: f.nom_native || f.nom_fichier || f.name,
                     url: `${API_BASE_URL}/documents-declaration/download/${f.id}`,
                     created_at: f.created_at || f.upload_date,
-                    size: f.size,
+                    size: f.taille,
                     type: f.type || 'application/pdf'
                 }));
 

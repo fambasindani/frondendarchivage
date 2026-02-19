@@ -66,7 +66,7 @@ const DirectionScreen = () => {
             const total = directions.length;
             const actives = directions.filter(d => d.statut === 1).length;
             const inactives = total - actives;
-            
+
             setStatsCards([
                 {
                     id: 1,

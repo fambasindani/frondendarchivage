@@ -88,7 +88,7 @@ const ModalDirectionScreen = ({ isOpen, onClose, directionToEdit = null, onSucce
             const userPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
             const permissionlist = JSON.parse(localStorage.getItem('permissionlist') || '[]');
            // const permissionsList  = userPermissions?.details?.map(p => p.description);
-
+              alert(userPermissions[1])
              //console.log(descriptions);
 
             

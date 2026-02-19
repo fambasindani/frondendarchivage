@@ -99,9 +99,6 @@ const LoginScreen = () => {
         localStorage.removeItem("rememberMe");
       }
 
-      // Redirection selon le module
-      const module = localStorage.getItem("archive_module");
-
       // Message de succès personnalisé
       Swal.fire({
         icon: 'success',
@@ -118,13 +115,76 @@ const LoginScreen = () => {
         timerProgressBar: true
       });
 
-      // Redirection
+      // =============================================
+      // VOTRE LOGIQUE DE REDIRECTION (AMÉLIORÉE)
+      // =============================================
+      
+      // Récupérer le module depuis localStorage
+      const module = localStorage.getItem("archive_module");
+      
+      // Récupérer les permissions de l'utilisateur
+      const userPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+
+      // Afficher les informations de debug dans la console
+      console.log('=== INFORMATIONS DE REDIRECTION ===');
+      console.log('Module demandé:', module);
+      console.log('Permissions utilisateur:', userPermissions);
+      console.log('====================================');
+
+      // Redirection selon votre logique
       if (module === "ad") {
-        history.push("/tableaudebord");
+        if (userPermissions.includes('archiv_doc')) {
+          console.log('✅ Accès autorisé au module admin (dashboard)');
+          history.push("/tableaudebord");
+        } else {
+          console.log('❌ Accès refusé au module admin - permission dashboard manquante');
+          Swal.fire({
+            icon: 'error',
+            title: 'Accès refusé',
+            text: "Vous n'avez pas la permission 'Achivage Document' pour accéder au module d'administration",
+            timer: 3000,
+            timerProgressBar: true
+          });
+          // Redirection vers une page par défaut ou on reste sur la page de connexion
+          // Vous pouvez décommenter la ligne ci-dessous si vous voulez rediriger
+          // history.push("/");
+        }
       } else if (module === "np") {
-        history.push("/tableaudebordnote");
+          history.push("/tableaudebordnote");
+        if (userPermissions.includes('note_perception')) {
+          console.log('✅ Accès autorisé au module note perception');
+          history.push("/tableaudebordnote");
+        } else {
+          console.log('❌ Accès refusé au module note perception - permission note_perception manquante');
+          Swal.fire({
+            icon: 'error',
+            title: 'Accès refusé',
+            text: "Vous n'avez pas la permission 'note_perception' pour accéder au module Note de Perception",
+            timer: 3000,
+            timerProgressBar: true
+          });
+          // Redirection vers une page par défaut ou on reste sur la page de connexion
+          // history.push("/");
+        }
       } else {
-        history.push("/tableaudebord");
+        // Module par défaut - redirection vers le dashboard si la permission existe
+        if (userPermissions.includes('archiv_doc')) {
+          console.log('✅ Redirection vers le dashboard par défaut');
+          history.push("/tableaudebord");
+        } else {
+          console.log('⚠️ Aucun module spécifique et pas de permission dashboard');
+          // Si pas de permission dashboard, on peut rediriger vers une autre page
+          // ou afficher un message
+          Swal.fire({
+            icon: 'info',
+            title: 'Information',
+            text: "Vous êtes connecté mais vous n'avez pas de module par défaut",
+            timer: 3000,
+            timerProgressBar: true
+          });
+          // Optionnel: rester sur la page de connexion ou rediriger vers une page d'accueil
+          // history.push("/");
+        }
       }
 
     } catch (error) {
@@ -177,12 +237,6 @@ const LoginScreen = () => {
   const isLocalhost =
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1";
-
-  // Fonction utilitaire pour vérifier si l'utilisateur a une permission
-  const hasPermission = (permissionCode) => {
-    const permissions = JSON.parse(localStorage.getItem('permissions') || '[]');
-    return permissions.includes(permissionCode);
-  };
 
   return (
     <div className="login-page min-vh-100 bg-gradient-custom d-flex align-items-center justify-content-center p-3 p-md-4">

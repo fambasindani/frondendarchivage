@@ -154,36 +154,122 @@ const ClasseurScreen = () => {
         setShowModal(true);
     };
 
-    const handleDelete = (id) => {
-        if (!token) return;
-
+  const handleDelete = (id) => {
+    if (!token) {
         Swal.fire({
-            title: "Voulez-vous désactiver ce classeur ?",
-            text: "Cette action va mettre à jour son statut.",
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#3085d6",
-            cancelButtonColor: "#d33",
-            confirmButtonText: "Oui, désactiver",
-            cancelButtonText: "Annuler",
-        }).then((result) => {
-            if (result.isConfirmed) {
-                axios
-                    .delete(
-                        `${API_BASE_URL}/classeurs/${id}`,
-                        { headers: { Authorization: `Bearer ${token}` } }
-                    )
-                    .then(() => {
-                        Swal.fire("Désactivé !", "Classeur désactivé avec succès.", "success");
-                        fetchClasseurs();
-                    })
-                    .catch((error) => {
-                        Swal.fire("Erreur", "Erreur lors de la désactivation.", "error");
-                        console.error(error);
-                    });
-            }
+            icon: 'error',
+            title: 'Non authentifié',
+            text: "Vous n'êtes pas authentifié. Veuillez vous reconnecter."
         });
-    };
+        return;
+    }
+
+    // Vérification de la permission
+    const permissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+    if (!permissions.includes('supprimer_classeur')) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Permission refusée',
+            text: "Vous n'avez pas la permission 'supprimer_classeur' pour désactiver un classeur."
+        });
+        return;
+    }
+
+    Swal.fire({
+        title: "Voulez-vous désactiver ce classeur ?",
+        text: "Cette action va mettre à jour son statut.",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#3085d6",
+        cancelButtonColor: "#d33",
+        confirmButtonText: "Oui, désactiver",
+        cancelButtonText: "Annuler",
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Afficher un chargement
+            Swal.fire({
+                title: 'Désactivation en cours...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            axios
+                .delete(
+                    `${API_BASE_URL}/classeurs/${id}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                )
+                .then((response) => {
+                    console.log('✅ Succès:', response.data);
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Désactivé !',
+                        text: response.data?.message || 'Classeur désactivé avec succès.',
+                        timer: 2000,
+                        timerProgressBar: true
+                    });
+                    
+                    fetchClasseurs();
+                })
+                .catch((error) => {
+                    console.error('❌ Erreur détaillée:', error);
+                    
+                    let errorMessage = "Erreur lors de la désactivation.";
+                    
+                    if (error.response) {
+                        // Le serveur a répondu avec une erreur
+                        console.error('Status:', error.response.status);
+                        console.error('Data:', error.response.data);
+                        
+                        const status = error.response.status;
+                        const data = error.response.data;
+                        
+                        // Messages personnalisés selon le status
+                        if (status === 403) {
+                            errorMessage = data?.message || "Vous n'avez pas la permission de désactiver ce classeur.";
+                        } else if (status === 404) {
+                            errorMessage = data?.message || "Classeur non trouvé.";
+                        } else if (status === 401) {
+                            errorMessage = "Session expirée. Veuillez vous reconnecter.";
+                            // Rediriger vers login après 2 secondes
+                            setTimeout(() => {
+                                window.location.href = '/login';
+                            }, 2000);
+                        } else if (status === 422) {
+                            errorMessage = data?.message || "Données invalides.";
+                        } else if (status >= 500) {
+                            errorMessage = "Erreur serveur. Veuillez réessayer plus tard.";
+                        }
+                        
+                        // Si le serveur a renvoyé un message d'erreur, on l'utilise
+                        if (data?.message) {
+                            errorMessage = data.message;
+                        }
+                        
+                    } else if (error.request) {
+                        // La requête a été faite mais pas de réponse
+                        console.error('Pas de réponse du serveur:', error.request);
+                        errorMessage = "Impossible de contacter le serveur. Vérifiez votre connexion.";
+                    } else {
+                        // Erreur lors de la configuration
+                        console.error('Erreur:', error.message);
+                        errorMessage = error.message || "Une erreur s'est produite.";
+                    }
+                    
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erreur',
+                        text: errorMessage,
+                        footer: 'Vérifiez la console pour plus de détails (F12)',
+                        timer: 3000,
+                        timerProgressBar: true
+                    });
+                });
+        }
+    });
+};
 
     const handlePageChange = (page) => {
         if (page >= 1 && page <= pagination.last_page) {

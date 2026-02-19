@@ -24,6 +24,7 @@ const Head = () => {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const logout = () => {
+     localStorage.clear();
     localStorage.removeItem("token");
     localStorage.removeItem("utilisateur");
     history.push("/");

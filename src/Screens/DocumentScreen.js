@@ -7,9 +7,9 @@ import Table from "../Composant/Table";
 import { API_BASE_URL } from "../config";
 import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
 import { useHistory } from "react-router-dom";
-import { 
-  FaPlus, 
-  FaSearch, 
+import {
+  FaPlus,
+  FaSearch,
   FaSync,
   FaFileAlt,
   FaEdit,
@@ -25,19 +25,47 @@ import {
   FaFolder
 } from 'react-icons/fa';
 import LoadingSpinner from "../Loading/LoadingSpinner";
+import { Link } from "react-router-dom/cjs/react-router-dom.min";
 
 const DocumentScreen = () => {
   const token = GetTokenOrRedirect();
   const utilisateur = JSON.parse(localStorage.getItem("utilisateur"));
-  const role = utilisateur?.role || "";
-  const id_direction = utilisateur?.id_direction || "";
-  
+  const role = JSON.parse(localStorage.getItem("role"));
+
+  // 🔹 Récupérer les IDs des départements de l'utilisateur depuis le login
+  const [userDirectionIds, setUserDirectionIds] = useState([]);
+  const [userDepartements, setUserDepartements] = useState([]);
+  const [isLoadingUserData, setIsLoadingUserData] = useState(true);
+
+  useEffect(() => {
+    const storedDepartements = JSON.parse(localStorage.getItem('departements') || '[]');
+    setUserDepartements(storedDepartements);
+    const ids = storedDepartements.map(dept => dept.id);
+    setUserDirectionIds(ids);
+    console.log('🏢 IDs des départements utilisateur (login):', ids);
+
+    // Si l'utilisateur n'a aucune direction, afficher un message
+    if (ids.length === 0) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Aucune direction',
+        text: "Vous n'avez accès à aucune direction. Veuillez contacter l'administrateur.",
+        timer: 3000,
+        timerProgressBar: true
+      });
+    }
+
+    // Marquer comme chargé
+    setTimeout(() => {
+      setIsLoadingUserData(false);
+    }, 500);
+  }, []);
+
   const history = useHistory();
 
-  // Documents + pagination + recherche
   const [documents, setDocuments] = useState([]);
-  const [pagination, setPagination] = useState({ 
-    current_page: 1, 
+  const [pagination, setPagination] = useState({
+    current_page: 1,
     last_page: 1,
     total: 0,
     per_page: 10
@@ -45,16 +73,16 @@ const DocumentScreen = () => {
   const [modeRecherche, setModeRecherche] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [filteredBy, setFilteredBy] = useState(null);
 
-  // Statistiques
   const [statsCards, setStatsCards] = useState([
     {
       id: 1,
-      title: "Total Documents",
+      title: "Mes Documents",
       value: "0",
       icon: <FaFileAlt style={{ fontSize: '24px' }} />,
       color: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      description: "Tous les documents"
+      description: "Documents accessibles"
     },
     {
       id: 2,
@@ -74,13 +102,11 @@ const DocumentScreen = () => {
     }
   ]);
 
-  // Navigation vers les formulaires
   const handleAddDocument = () => {
     history.push('/addform');
   };
 
   const handleEditDocument = (document) => {
-   // alert(document.id)
     history.push(`/addform/${document.id}`);
   };
 
@@ -100,7 +126,6 @@ const DocumentScreen = () => {
       cancelButtonText: "Annuler",
     }).then((result) => {
       if (result.isConfirmed) {
-        // Logique de duplication
         Swal.fire("Dupliqué !", "Document dupliqué avec succès.", "success");
       }
     });
@@ -139,91 +164,129 @@ const DocumentScreen = () => {
     });
   };
 
-  // Chargement des documents
+  // 🔥 useEffect avec dépendances
   useEffect(() => {
-    if (token) {
+    // Attendre que les données utilisateur soient chargées
+    if (token && !isLoadingUserData) {
       fetchDocuments();
     }
-  }, [pagination.current_page, modeRecherche, token]);
+  }, [pagination.current_page, modeRecherche, token, userDirectionIds, isLoadingUserData]);
 
   const fetchDocuments = async () => {
     if (!token) return;
 
     setLoading(true);
+    setDocuments([]); // Vider les anciens documents
+
     try {
+      let params = {
+        page: pagination.current_page,
+        per_page: 10
+      };
+
+      // 🔥 N'envoyer les direction_ids QUE s'ils existent
+      if (userDirectionIds.length > 0) {
+        params.direction_ids = userDirectionIds.join(',');
+        console.log('📤 Envoi des direction_ids:', params.direction_ids);
+      } else {
+        console.log('📤 Aucune direction - ne rien afficher');
+        // Si pas de direction, afficher directement un tableau vide
+        setDocuments([]);
+        setFilteredBy('none');
+        setPagination({
+          current_page: 1,
+          last_page: 1,
+          total: 0,
+          per_page: 10
+        });
+        setLoading(false);
+        return;
+      }
+
       let res;
       if (modeRecherche && search.trim() !== "") {
         res = await axios.post(
-          `${API_BASE_URL}/declarations/search`,
-          { search, page: pagination.current_page },
+          `${API_BASE_URL}/declarations/search`, // À adapter selon votre besoin
+          {
+            search,
+            page: pagination.current_page,
+            direction_ids: userDirectionIds
+          },
           { headers: { Authorization: `Bearer ${token}` } }
         );
       } else {
-        res = await axios.get(`${API_BASE_URL}/declarations?page=${pagination.current_page}`, {
+        res = await axios.get(`${API_BASE_URL}/declarations`, {
           headers: { Authorization: `Bearer ${token}` },
+          params: params
         });
       }
 
-      setDocuments(res.data.data);
-      setPagination({ 
-        current_page: res.data.current_page, 
-        last_page: res.data.last_page,
-        total: res.data.total,
-        per_page: res.data.per_page || 10
+      console.log('📥 Réponse brute:', res.data);
+
+      // Adapter à la structure de la réponse
+      const responseData = res.data.data || res.data;
+      const documentsList = responseData.data || responseData || [];
+      const filteredByValue = res.data.filtered_by || 'all';
+
+      console.log('📊 Documents reçus:', documentsList.length);
+      console.log('📌 IDs des directions:', [...new Set(documentsList.map(d => d.id_direction))]);
+
+      setDocuments(documentsList);
+      setFilteredBy(filteredByValue);
+
+      setPagination({
+        current_page: responseData.current_page || 1,
+        last_page: responseData.last_page || 1,
+        total: responseData.total || documentsList.length,
+        per_page: responseData.per_page || 10
       });
 
-      // Mettre à jour les statistiques
-      const total = res.data.total || res.data.data.length;
-      const actifs = res.data.data.filter(d => d.statut === true || d.statut === 1).length;
-      const inactifs = total - actifs;
+      // Mettre à jour les stats
+      const total = documentsList.length;
+      const actifs = documentsList.filter(d => d.statut === true || d.statut === 1).length;
 
-      setStatsCards([
-        {
-          id: 1,
-          title: "Total Documents",
-          value: total.toString(),
-          icon: <FaFileAlt style={{ fontSize: '24px' }} />,
-          color: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          description: "Tous les documents"
-        },
-        {
-          id: 2,
-          title: "Documents Actifs",
-          value: actifs.toString(),
-          icon: <FaFileAlt style={{ fontSize: '24px' }} />,
-          color: "linear-gradient(135deg, #20c997 0%, #17a2b8 100%)",
-          description: `${actifs > 0 ? Math.round((actifs / total) * 100) : 0}% actifs`
-        },
-        {
-          id: 3,
-          title: "Documents Inactifs",
-          value: inactifs.toString(),
-          icon: <FaFileAlt style={{ fontSize: '24px' }} />,
-          color: "linear-gradient(135deg, #ffc107 0%, #fd7e14 100%)",
-          description: `${inactifs > 0 ? Math.round((inactifs / total) * 100) : 0}% inactifs`
-        }
+      setStatsCards(prev => [
+        { ...prev[0], value: total.toString() },
+        { ...prev[1], value: actifs.toString(), description: total > 0 ? `${Math.round((actifs / total) * 100)}% actifs` : '0% actifs' },
+        { ...prev[2], value: (total - actifs).toString(), description: total > 0 ? `${Math.round(((total - actifs) / total) * 100)}% inactifs` : '0% inactifs' }
       ]);
+
     } catch (err) {
-      console.error(err);
-      Swal.fire("Erreur", "Erreur lors du chargement des documents", "error");
+      console.error('❌ Erreur:', err);
+      Swal.fire({
+        icon: 'error',
+        title: 'Erreur',
+        text: err.response?.data?.message || "Erreur lors du chargement"
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const handleSearch = () => {
-    setPagination((prev) => ({ ...prev, current_page: 1 }));
+    setPagination({ current_page: 1, last_page: 1, total: 0, per_page: 10 });
     setModeRecherche(true);
   };
 
   const actualiser = () => {
     setSearch("");
     setModeRecherche(false);
-    setPagination({ current_page: 1, last_page: 1 });
+    setDocuments([]);
+    setPagination({ current_page: 1, last_page: 1, total: 0, per_page: 10 });
   };
 
   const handleDelete = (id, intitule) => {
     if (!token) return;
+
+    const permissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+    if (!permissions.includes('supprimer_document')) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Permission refusée',
+        text: "Vous n'avez pas la permission de supprimer des documents"
+      });
+      return;
+    }
 
     Swal.fire({
       title: "Voulez-vous désactiver ce document ?",
@@ -255,7 +318,7 @@ const DocumentScreen = () => {
 
   const handlePageChange = (page) => {
     if (page >= 1 && page <= pagination.last_page) {
-      setPagination((prev) => ({ ...prev, current_page: page }));
+      setPagination(prev => ({ ...prev, current_page: page }));
     }
   };
 
@@ -265,8 +328,8 @@ const DocumentScreen = () => {
       label: "Classeur",
       render: (row) => row.nom_classeur || (row.classeur && row.classeur.nom_classeur) || "N/A",
     },
-    { 
-      key: "intitule", 
+    {
+      key: "intitule",
       label: "Intitulé",
       render: (row) => (
         <div>
@@ -275,25 +338,28 @@ const DocumentScreen = () => {
         </div>
       )
     },
-    { 
-      key: "mot_cle", 
+    {
+      key: "mot_cle",
       label: "Mot Clé",
       render: (row) => (
         <span className="badge badge-info">{row.mot_cle}</span>
       )
     },
-    { 
-      key: "nom_direction", 
+    {
+      key: "nom_direction",
       label: "Direction",
       render: (row) => (
         <div className="d-flex align-items-center">
           <FaBuilding className="mr-2 text-muted" />
           {row.nom_direction}
+          <span className="badge badge-info ml-2">
+            ID: {row.id_direction}
+          </span>
         </div>
       )
     },
-    { 
-      key: "nom_emplacement", 
+    {
+      key: "nom_emplacement",
       label: "Emplacement",
       render: (row) => (
         <div className="d-flex align-items-center">
@@ -302,8 +368,8 @@ const DocumentScreen = () => {
         </div>
       )
     },
-    { 
-      key: "created_at", 
+    {
+      key: "created_at",
       label: "Date Création",
       render: (row) => {
         const date = new Date(row.created_at);
@@ -315,8 +381,8 @@ const DocumentScreen = () => {
         );
       }
     },
-    { 
-      key: "statut", 
+    {
+      key: "statut",
       label: "Statut",
       render: (row) => (
         <span className={`badge ${row.statut ? 'badge-success' : 'badge-secondary'}`}>
@@ -326,7 +392,6 @@ const DocumentScreen = () => {
     }
   ];
 
-  // Composant Dropdown d'actions
   const ActionDropdown = ({ document }) => {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -354,7 +419,6 @@ const DocumentScreen = () => {
         icon: <FaDownload />,
         color: "secondary",
         onClick: () => {
-          // Logique de téléchargement
           window.open(`${API_BASE_URL}/declarations/${document.id}/download`, '_blank');
         }
       },
@@ -384,29 +448,19 @@ const DocumentScreen = () => {
           className="btn btn-sm btn-outline-secondary"
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          style={{
-            border: 'none',
-            background: 'transparent'
-          }}
         >
           <FaEllipsisV />
         </button>
-        
+
         {isOpen && (
           <>
-            <div 
-              className="position-fixed" 
-              style={{ 
-                top: 0, 
-                left: 0, 
-                right: 0, 
-                bottom: 0, 
-                zIndex: 1040 
-              }} 
+            <div
+              className="position-fixed"
+              style={{ top: 0, left: 0, right: 0, bottom: 0, zIndex: 1040 }}
               onClick={() => setIsOpen(false)}
             />
-            <div 
-              className="dropdown-menu show shadow" 
+            <div
+              className="dropdown-menu show shadow"
               style={{
                 position: 'absolute',
                 right: 0,
@@ -455,17 +509,56 @@ const DocumentScreen = () => {
             <div className="row mb-3">
               <div className="col-sm-6">
                 <h1 className="m-0 text-dark">
-                  <FaFileAlt className="mr-2" style={{ fontSize: '24px' }} /> Gestion des Documents
+                  <FaFileAlt className="mr-2" style={{ fontSize: '24px' }} />
+                  Mes Documents
                 </h1>
-                <p className="text-muted mb-0">Gérez les documents de votre organisation</p>
+                <p className="text-muted mb-0">
+                  {userDirectionIds.length > 0
+                    ? `Documents des directions: ${userDirectionIds.join(', ')}`
+                    : "Aucune direction assignée"}
+                </p>
+                {filteredBy && filteredBy !== 'all' && filteredBy !== 'none' && Array.isArray(filteredBy) && (
+                  <p className="text-info small">
+                    <FaBuilding className="mr-1" />
+                    Filtré par directions: {filteredBy.join(', ')}
+                  </p>
+                )}
+                {filteredBy === 'none' && (
+                  <p className="text-warning small">
+                    <FaBuilding className="mr-1" />
+                    Aucune direction accessible
+                  </p>
+                )}
               </div>
               <div className="col-sm-6">
                 <ol className="breadcrumb float-sm-right">
-                  <li className="breadcrumb-item"><a href="/">Accueil</a></li>
+                  <li className="breadcrumb-item">
+                    <Link to="/">Accueil</Link>
+                  </li>
                   <li className="breadcrumb-item active">Documents</li>
                 </ol>
               </div>
             </div>
+
+            {userDepartements.length > 0 && (
+              <div className="row mb-3">
+                <div className="col-12">
+                  <div className="bg-white p-3 rounded shadow-sm">
+                    <h6 className="mb-2">
+                      <FaBuilding className="mr-2 text-primary" />
+                      Mes directions accessibles
+                    </h6>
+                    <div className="d-flex flex-wrap">
+                      {userDepartements.map(dept => (
+                        <span key={dept.id} className="badge badge-info p-2 mr-2 mb-2">
+                          {dept.sigle} - {dept.nom} (ID: {dept.id})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -506,17 +599,18 @@ const DocumentScreen = () => {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                        disabled={userDirectionIds.length === 0} // Désactiver si pas de direction
                       />
                       <div className="input-group-append">
-                        <button 
-                          onClick={handleSearch} 
+                        <button
+                          onClick={handleSearch}
                           className="btn btn-primary"
-                          disabled={loading}
+                          disabled={loading || userDirectionIds.length === 0}
                         >
                           <FaSearch className="mr-1" /> Rechercher
                         </button>
-                        <button 
-                          onClick={actualiser} 
+                        <button
+                          onClick={actualiser}
                           className="btn btn-outline-secondary ml-2"
                           disabled={loading}
                         >
@@ -529,7 +623,7 @@ const DocumentScreen = () => {
                     <button
                       className="btn btn-primary btn-lg"
                       onClick={handleAddDocument}
-                      disabled={loading}
+                      disabled={loading || userDirectionIds.length === 0}
                     >
                       <FaPlus className="mr-2" /> Nouveau Document
                     </button>
@@ -542,19 +636,43 @@ const DocumentScreen = () => {
             <div className="row">
               <div className="col-md-12">
                 {loading ? (
-                <LoadingSpinner message="Chargement des documents..." />
-              ) : documents.length === 0 ? (
-                <div className="empty-state bg-white rounded shadow-sm p-5 text-center">
-                  <div className="empty-icon-wrapper bg-light rounded-circle p-4 mx-auto mb-4">
-                    <FaFolder className="text-muted" size={48} />
+                  <LoadingSpinner message="Chargement des documents..." />
+                ) : documents.length === 0 ? (
+                  <div className="empty-state bg-white rounded shadow-sm p-5 text-center">
+                    <div className="empty-icon-wrapper bg-light rounded-circle p-4 mx-auto mb-4">
+                      <FaFolder className="text-muted" size={48} />
+                    </div>
+                    <h5 className="text-dark mb-2">Aucun document trouvé</h5>
+                    <p className="text-muted mb-4">
+                      {userDepartements.length === 0
+                        ? "Vous n'avez accès à aucune direction. Veuillez contacter l'administrateur."
+                        : userDirectionIds.length > 0
+                          ? `Aucun document n'est disponible pour vos directions (IDs: ${userDirectionIds.join(', ')})`
+                          : search
+                            ? `Aucun résultat pour "${search}"`
+                            : "Commencez par ajouter un nouveau document"}
+                    </p>
+                    {!search && userDirectionIds.length > 0 && (
+                      <button
+                        className="btn btn-primary mt-3"
+                        onClick={handleAddDocument}
+                      >
+                        <FaPlus className="mr-2" /> Ajouter un document
+                      </button>
+                    )}
                   </div>
-                  {/* ... reste du code ... */}
-                </div>
-              ) : (
+                ) : (
                   <>
                     <div className="card border-0 shadow-sm">
                       <div className="card-header bg-light d-flex justify-content-between align-items-center">
-                        <h6 className="mb-0 font-weight-bold">Liste des Documents</h6>
+                        <h6 className="mb-0 font-weight-bold">
+                          Liste des Documents
+                          {filteredBy && filteredBy !== 'all' && filteredBy !== 'none' && Array.isArray(filteredBy) && (
+                            <span className="ml-2 text-muted">
+                              (Filtré par directions: {filteredBy.join(', ')})
+                            </span>
+                          )}
+                        </h6>
                         <span className="badge badge-light">
                           {pagination.total} document{pagination.total > 1 ? 's' : ''}
                         </span>
@@ -562,36 +680,13 @@ const DocumentScreen = () => {
                       <div className="card-body p-0">
                         <Table
                           columns={customColumns}
-                          data={
-                            role === "admin"
-                              ? documents
-                              : documents.filter(
-                                  (doc) => doc.id_direction === id_direction
-                                )
-                          }
+                          data={documents}
                           startIndex={(pagination.current_page - 1) * pagination.per_page}
-                          emptyMessage={
-                            <div className="text-center py-5">
-                              <FaFileAlt className="text-muted mb-3" style={{ fontSize: '3rem' }} />
-                              <h5 className="text-muted">Aucun document trouvé</h5>
-                              <p className="text-muted mb-0">
-                                {search ? `Aucun résultat pour "${search}"` : "Commencez par ajouter un nouveau document"}
-                              </p>
-                              {!search && (
-                                <button
-                                  className="btn btn-primary mt-3"
-                                  onClick={handleAddDocument}
-                                >
-                                  <FaPlus className="mr-2" /> Ajouter un document
-                                </button>
-                              )}
-                            </div>
-                          }
                         />
                       </div>
                     </div>
 
-                    {documents.length > 0 && (
+                    {documents.length > 0 && pagination.last_page > 1 && (
                       <div className="card border-0 shadow-sm mt-3">
                         <div className="card-body">
                           <div className="d-flex justify-content-between align-items-center">
@@ -601,75 +696,29 @@ const DocumentScreen = () => {
                             <nav>
                               <ul className="pagination mb-0">
                                 <li className={`page-item ${pagination.current_page === 1 ? "disabled" : ""}`}>
-                                  <button 
-                                    className="page-link border-0" 
+                                  <button
+                                    className="page-link border-0"
                                     onClick={() => handlePageChange(pagination.current_page - 1)}
                                     disabled={pagination.current_page === 1}
                                   >
                                     Précédent
                                   </button>
                                 </li>
-                                
-                                {(() => {
-                                  const pages = [];
-                                  const totalPages = pagination.last_page;
-                                  const current = pagination.current_page;
-                                  
-                                  // Toujours afficher la première page
-                                  pages.push(
-                                    <li key={1} className={`page-item ${current === 1 ? "active" : ""}`}>
-                                      <button className="page-link border-0" onClick={() => handlePageChange(1)}>
-                                        1
-                                      </button>
-                                    </li>
-                                  );
-                                  
-                                  // Ajouter des points de suspension si nécessaire
-                                  if (current > 3) {
-                                    pages.push(
-                                      <li key="ellipsis1" className="page-item disabled">
-                                        <span className="page-link border-0">...</span>
-                                      </li>
-                                    );
-                                  }
-                                  
-                                  // Pages autour de la page courante
-                                  for (let i = Math.max(2, current - 1); i <= Math.min(totalPages - 1, current + 1); i++) {
-                                    pages.push(
-                                      <li key={i} className={`page-item ${current === i ? "active" : ""}`}>
-                                        <button className="page-link border-0" onClick={() => handlePageChange(i)}>
-                                          {i}
-                                        </button>
-                                      </li>
-                                    );
-                                  }
-                                  
-                                  // Ajouter des points de suspension si nécessaire
-                                  if (current < totalPages - 2) {
-                                    pages.push(
-                                      <li key="ellipsis2" className="page-item disabled">
-                                        <span className="page-link border-0">...</span>
-                                      </li>
-                                    );
-                                  }
-                                  
-                                  // Toujours afficher la dernière page
-                                  if (totalPages > 1) {
-                                    pages.push(
-                                      <li key={totalPages} className={`page-item ${current === totalPages ? "active" : ""}`}>
-                                        <button className="page-link border-0" onClick={() => handlePageChange(totalPages)}>
-                                          {totalPages}
-                                        </button>
-                                      </li>
-                                    );
-                                  }
-                                  
-                                  return pages;
-                                })()}
-                                
+
+                                {[...Array(pagination.last_page)].map((_, i) => (
+                                  <li key={i + 1} className={`page-item ${pagination.current_page === i + 1 ? 'active' : ''}`}>
+                                    <button
+                                      className="page-link border-0"
+                                      onClick={() => handlePageChange(i + 1)}
+                                    >
+                                      {i + 1}
+                                    </button>
+                                  </li>
+                                ))}
+
                                 <li className={`page-item ${pagination.current_page === pagination.last_page ? "disabled" : ""}`}>
-                                  <button 
-                                    className="page-link border-0" 
+                                  <button
+                                    className="page-link border-0"
                                     onClick={() => handlePageChange(pagination.current_page + 1)}
                                     disabled={pagination.current_page === pagination.last_page}
                                   >

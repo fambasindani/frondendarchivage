@@ -7,9 +7,9 @@ import Table from "../Composant/Table";
 import { API_BASE_URL } from "../config";
 import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
 import { useHistory } from "react-router-dom";
-import { 
-  FaPlus, 
-  FaSearch, 
+import {
+  FaPlus,
+  FaSearch,
   FaSync,
   FaFileAlt,
   FaEdit,
@@ -26,15 +26,16 @@ import LoadingSpinner from "../Loading/LoadingSpinner";
 const NoteperceptionScreen = () => {
   const token = GetTokenOrRedirect();
   const utilisateur = JSON.parse(localStorage.getItem("utilisateur"));
-  const role = utilisateur?.role || "";
+  //const role = utilisateur?.role || "";
+  const role = JSON.parse(localStorage.getItem("role"));
   const id_centre = utilisateur?.id_centre || "";
-  
+
   const history = useHistory();
 
   // Notes + pagination + recherche
   const [notes, setNotes] = useState([]);
-  const [pagination, setPagination] = useState({ 
-    current_page: 1, 
+  const [pagination, setPagination] = useState({
+    current_page: 1,
     last_page: 1,
     total: 0,
     per_page: 20
@@ -110,10 +111,10 @@ const NoteperceptionScreen = () => {
       }
 
       console.log("Données reçues:", res.data);
-      
+
       setNotes(res.data.data);
-      setPagination({ 
-        current_page: res.data.current_page, 
+      setPagination({
+        current_page: res.data.current_page,
         last_page: res.data.last_page,
         total: res.data.total,
         per_page: res.data.per_page || 20
@@ -218,8 +219,8 @@ const NoteperceptionScreen = () => {
 
   // Colonnes du tableau SANS centre et classeur
   const columns = [
-    { 
-      key: "numero_serie", 
+    {
+      key: "numero_serie",
       label: "Num. Série",
       render: (row) => (
         <div>
@@ -227,13 +228,13 @@ const NoteperceptionScreen = () => {
         </div>
       )
     },
-    { 
-      key: "date_ordonnancement", 
+    {
+      key: "date_ordonnancement",
       label: "Date Ord.",
       render: (row) => formatDate(row.date_ordonnancement)
     },
-    { 
-      key: "date_enregistrement", 
+    {
+      key: "date_enregistrement",
       label: "Date Enr.",
       render: (row) => formatDate(row.date_enregistrement)
     },
@@ -257,8 +258,8 @@ const NoteperceptionScreen = () => {
         );
       }
     },
-    { 
-      key: "statut", 
+    {
+      key: "statut",
       label: "Statut",
       render: (row) => (
         <span className={`badge ${row.statut ? 'badge-success' : 'badge-secondary'}`}>
@@ -290,7 +291,7 @@ const NoteperceptionScreen = () => {
         icon: <FaDownload />,
         color: "secondary",
         onClick: () => {
-          window.open(`${API_BASE_URL}/notes/${note.id}/download`, '_blank');
+          //.open(`${API_BASE_URL}/notes/${note.id}/download`, '_blank');
         }
       },
       {
@@ -314,22 +315,22 @@ const NoteperceptionScreen = () => {
         >
           <FaEllipsisV />
         </button>
-        
+
         {isOpen && (
           <>
-            <div 
-              className="position-fixed" 
-              style={{ 
-                top: 0, 
-                left: 0, 
-                right: 0, 
-                bottom: 0, 
-                zIndex: 1040 
-              }} 
+            <div
+              className="position-fixed"
+              style={{
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1040
+              }}
               onClick={() => setIsOpen(false)}
             />
-            <div 
-              className="dropdown-menu show shadow" 
+            <div
+              className="dropdown-menu show shadow"
               style={{
                 position: 'absolute',
                 right: 0,
@@ -431,15 +432,15 @@ const NoteperceptionScreen = () => {
                         onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                       />
                       <div className="input-group-append">
-                        <button 
-                          onClick={handleSearch} 
+                        <button
+                          onClick={handleSearch}
                           className="btn btn-primary"
                           disabled={loading}
                         >
                           <FaSearch className="mr-1" /> Rechercher
                         </button>
-                        <button 
-                          onClick={actualiser} 
+                        <button
+                          onClick={actualiser}
                           className="btn btn-outline-secondary ml-2"
                           disabled={loading}
                         >
@@ -493,16 +494,11 @@ const NoteperceptionScreen = () => {
                           {pagination.total} note{pagination.total > 1 ? 's' : ''}
                         </span>
                       </div>
+
                       <div className="card-body p-0">
                         <Table
                           columns={customColumns}
-                          data={
-                            role === "admin"
-                              ? notes
-                              : notes.filter(
-                                  (note) => note.id_centre_ordonnancement === id_centre
-                                )
-                          }
+                          data={notes}
                           startIndex={(pagination.current_page - 1) * pagination.per_page}
                         />
                       </div>
@@ -518,20 +514,20 @@ const NoteperceptionScreen = () => {
                             <nav>
                               <ul className="pagination mb-0">
                                 <li className={`page-item ${pagination.current_page === 1 ? "disabled" : ""}`}>
-                                  <button 
-                                    className="page-link border-0" 
+                                  <button
+                                    className="page-link border-0"
                                     onClick={() => handlePageChange(pagination.current_page - 1)}
                                     disabled={pagination.current_page === 1}
                                   >
                                     Précédent
                                   </button>
                                 </li>
-                                
+
                                 {(() => {
                                   const pages = [];
                                   const totalPages = pagination.last_page;
                                   const current = pagination.current_page;
-                                  
+
                                   pages.push(
                                     <li key={1} className={`page-item ${current === 1 ? "active" : ""}`}>
                                       <button className="page-link border-0" onClick={() => handlePageChange(1)}>
@@ -539,7 +535,7 @@ const NoteperceptionScreen = () => {
                                       </button>
                                     </li>
                                   );
-                                  
+
                                   if (current > 3) {
                                     pages.push(
                                       <li key="ellipsis1" className="page-item disabled">
@@ -547,7 +543,7 @@ const NoteperceptionScreen = () => {
                                       </li>
                                     );
                                   }
-                                  
+
                                   for (let i = Math.max(2, current - 1); i <= Math.min(totalPages - 1, current + 1); i++) {
                                     pages.push(
                                       <li key={i} className={`page-item ${current === i ? "active" : ""}`}>
@@ -557,7 +553,7 @@ const NoteperceptionScreen = () => {
                                       </li>
                                     );
                                   }
-                                  
+
                                   if (current < totalPages - 2) {
                                     pages.push(
                                       <li key="ellipsis2" className="page-item disabled">
@@ -565,7 +561,7 @@ const NoteperceptionScreen = () => {
                                       </li>
                                     );
                                   }
-                                  
+
                                   if (totalPages > 1) {
                                     pages.push(
                                       <li key={totalPages} className={`page-item ${current === totalPages ? "active" : ""}`}>
@@ -575,13 +571,13 @@ const NoteperceptionScreen = () => {
                                       </li>
                                     );
                                   }
-                                  
+
                                   return pages;
                                 })()}
-                                
+
                                 <li className={`page-item ${pagination.current_page === pagination.last_page ? "disabled" : ""}`}>
-                                  <button 
-                                    className="page-link border-0" 
+                                  <button
+                                    className="page-link border-0"
                                     onClick={() => handlePageChange(pagination.current_page + 1)}
                                     disabled={pagination.current_page === pagination.last_page}
                                   >
