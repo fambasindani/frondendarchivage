@@ -12,14 +12,14 @@ import { FaArrowLeft, FaFileAlt, FaSpinner } from 'react-icons/fa';
 const FormNoteScreen = () => {
     const history = useHistory();
     const token = GetTokenOrRedirect();
-    
+
     // Extraire l'ID de l'URL
     const getCurrentId = () => {
         const path = window.location.pathname;
         const match = path.match(/\/note\/form\/(\d+)$/);
         return match ? parseInt(match[1], 10) : null;
     };
-    
+
     const id = getCurrentId();
     const isEditing = !!id;
 
@@ -37,24 +37,33 @@ const FormNoteScreen = () => {
             try {
                 // Charger les listes déroulantes
                 const [directionsRes, classeursRes, centresRes, emplacementsRes] = await Promise.all([
-                    axios.get(`${API_BASE_URL}/articleall`, { 
-                        headers: { Authorization: `Bearer ${token}` } 
+                    axios.get(`${API_BASE_URL}/articleall`, {
+                        headers: { Authorization: `Bearer ${token}` }
                     }),
-                    axios.get(`${API_BASE_URL}/classeur`, { 
-                        headers: { Authorization: `Bearer ${token}` } 
+                    axios.get(`${API_BASE_URL}/classeur`, {
+                        headers: { Authorization: `Bearer ${token}` }
                     }),
-                    axios.get(`${API_BASE_URL}/centre_ordonnancements/all`, { 
-                        headers: { Authorization: `Bearer ${token}` } 
+                    axios.get(`${API_BASE_URL}/centre_ordonnancements/all`, {
+                        headers: { Authorization: `Bearer ${token}` }
                     }),
-                    axios.get(`${API_BASE_URL}/emplacements`, { 
-                        headers: { Authorization: `Bearer ${token}` } 
+                    axios.get(`${API_BASE_URL}/emplacements`, {
+                        headers: { Authorization: `Bearer ${token}` }
                     }),
                 ]);
 
                 setDirections(directionsRes.data.data || directionsRes.data);
-                setClasseurs(classeursRes.data.data || classeursRes.data);
+                // setClasseurs(classeursRes.data.data || classeursRes.data);
+                const classeursData = classeursRes.data.data || classeursRes.data;
+                console.log(classeursData)
+                const filteredClasseurs = classeursData.filter(
+                    classeur => classeur.nom_classeur === "Note de Perception"
+                );
+                setClasseurs(filteredClasseurs);
+
                 setCentres(centresRes.data.data || centresRes.data);
                 setEmplacements(emplacementsRes.data.data || emplacementsRes.data);
+
+
 
                 // Charger la note si en mode édition
                 if (isEditing && id) {
@@ -62,7 +71,7 @@ const FormNoteScreen = () => {
                         `${API_BASE_URL}/notes/${id}`,
                         { headers: { Authorization: `Bearer ${token}` } }
                     );
-                    
+
                     // Transformer les données pour extraire les IDs
                     const noteData = noteRes.data;
                     const transformedData = {
@@ -73,7 +82,7 @@ const FormNoteScreen = () => {
                         id_assujetti: noteData.id_assujetti?.id || noteData.id_assujetti,
                         id_emplacement: noteData.id_emplacement?.id || noteData.id_emplacement,
                     };
-                    
+
                     setNoteToEdit(transformedData);
                 }
             } catch (err) {

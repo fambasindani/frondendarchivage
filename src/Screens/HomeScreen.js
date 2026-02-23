@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useHistory } from "react-router-dom";
-import logo from '../Images/Logo.png'
+import logo from '../Images/Logo.png';
+import axios from "axios";
 
 import {
     FaArchive,
@@ -17,15 +18,38 @@ import {
     FaCalendarAlt,
     FaShieldAlt,
     FaFileContract,
-    FaRegFileAlt
+    FaRegFileAlt,
+    FaSpinner,
+    FaTimes,
+    FaChevronUp,
+    FaChevronDown
 } from "react-icons/fa";
 import "../style/HomeScreen.css";
+import { API_BASE_URL } from "../config";
 
 const HomeScreen = () => {
     const history = useHistory();
     const [currentTime, setCurrentTime] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [showWelcome, setShowWelcome] = useState(true); // État pour afficher/masquer la carte de bienvenue
+    const [stats, setStats] = useState({
+        total_archives: 0,
+        archivages_mois: 0,
+        documents_traitement: 0,
+        taux_disponibilite: 99.8,
+        modules: {
+            ad: { total: 0, monthly: 0, label: "Archivage Ordinaire" },
+            np: { total: 0, monthly: 0, label: "Notes de Perception" }
+        }
+    });
 
     useEffect(() => {
+        // Vérifier si l'utilisateur a déjà masqué la carte de bienvenue
+        const welcomeHidden = localStorage.getItem("hide_welcome_card");
+        if (welcomeHidden === "true") {
+            setShowWelcome(false);
+        }
+
         // Mettre à jour l'heure actuelle
         const updateTime = () => {
             const now = new Date();
@@ -43,18 +67,51 @@ const HomeScreen = () => {
         };
 
         updateTime();
-        const interval = setInterval(updateTime, 60000); // Mettre à jour chaque minute
+        const interval = setInterval(updateTime, 60000);
+
+        // Charger les statistiques
+        fetchStats();
 
         return () => clearInterval(interval);
     }, []);
+
+    const fetchStats = async () => {
+        try {
+            setLoading(true);
+            
+            // Appel à l'API publique pour les statistiques globales
+            const response = await axios.get(`${API_BASE_URL}/public/stats`);
+            
+            if (response.data.success) {
+                setStats(response.data.data);
+            }
+            
+            // Optionnel : charger aussi les détails des modules
+            const modulesResponse = await axios.get(`${API_BASE_URL}/public/modules`);
+            if (modulesResponse.data.success) {
+                console.log("Modules:", modulesResponse.data.data);
+            }
+            
+        } catch (error) {
+            console.error("Erreur chargement statistiques:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleModuleClick = (moduleType) => {
         // Stocker le type de module dans localStorage
         localStorage.removeItem("archive_module");
         localStorage.setItem("archive_module", moduleType);
-           //alert(moduleType)
         // Rediriger vers la page de connexion
-           history.push("/login");
+        history.push("/login");
+    };
+
+    const toggleWelcomeCard = () => {
+        const newState = !showWelcome;
+        setShowWelcome(newState);
+        // Sauvegarder la préférence de l'utilisateur
+        localStorage.setItem("hide_welcome_card", (!newState).toString());
     };
 
     const ModuleCard = ({ title, description, icon, color, stats, moduleType }) => (
@@ -84,6 +141,11 @@ const HomeScreen = () => {
         </div>
     );
 
+    // Formatage des nombres
+    const formatNumber = (num) => {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    };
+
     return (
         <div className="home-screen">
             {/* Header avec logo et informations */}
@@ -95,8 +157,6 @@ const HomeScreen = () => {
                             alt="DGRAD Logo"
                             className="dgrad-logo"
                         />
-
-
                         <div className="logo-text">
                             <h1>DGRAD</h1>
                             <p>Direction Générale des Recettes Administratives, Judiciaires, Domaniales et de Participations</p>
@@ -129,16 +189,96 @@ const HomeScreen = () => {
 
             {/* Contenu principal */}
             <main className="home-main">
-                {/* Message de bienvenue */}
-                <section className="welcome-section">
-                    <div className="welcome-card">
-                        <h2>Bienvenue sur la Plateforme d'Archivage DGRAD</h2>
-                        <p>
-                            Cette plateforme vous permet de gérer efficacement les archives administratives et financières
-                            de la Direction Générale des Recettes. Sélectionnez le module correspondant à vos besoins pour commencer.
-                        </p>
+                {/* Message de bienvenue avec toggle */}
+                {showWelcome ? (
+                    <section className="welcome-section">
+                        <div className="welcome-card" style={{ position: 'relative' }}>
+                            <button 
+                                onClick={toggleWelcomeCard}
+                                style={{
+                                    position: 'absolute',
+                                    top: '15px',
+                                    right: '15px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: '#999',
+                                    fontSize: '18px',
+                                    width: '32px',
+                                    height: '32px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: '50%',
+                                    transition: 'all 0.3s ease',
+                                    zIndex: 10
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.target.style.backgroundColor = '#f0f0f0';
+                                    e.target.style.color = '#666';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.target.style.backgroundColor = 'transparent';
+                                    e.target.style.color = '#999';
+                                }}
+                                title="Masquer ce message"
+                            >
+                                <FaTimes />
+                            </button>
+                            <h2>Bienvenue sur la Plateforme d'Archivage DGRAD</h2>
+                            <p>
+                                Cette plateforme vous permet de gérer efficacement les archives administratives et financières
+                                de la Direction Générale des Recettes. Sélectionnez le module correspondant à vos besoins pour commencer.
+                            </p>
+                            <div style={{ 
+                                marginTop: '15px', 
+                                display: 'flex', 
+                                justifyContent: 'flex-end',
+                                borderTop: '1px solid #eee',
+                                paddingTop: '15px'
+                            }}>
+                                <small style={{ color: '#999' }}>
+                                    Vous pouvez masquer ce message définitivement en cliquant sur la croix
+                                </small>
+                            </div>
+                        </div>
+                    </section>
+                ) : (
+                    <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'flex-end', 
+                        marginBottom: '15px',
+                        padding: '0 15px'
+                    }}>
+                        <button
+                            onClick={toggleWelcomeCard}
+                            style={{
+                                background: 'transparent',
+                                border: '1px dashed #ccc',
+                                borderRadius: '20px',
+                                padding: '5px 15px',
+                                color: '#666',
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                transition: 'all 0.3s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.target.style.backgroundColor = '#f8f9fa';
+                                e.target.style.borderColor = '#999';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.backgroundColor = 'transparent';
+                                e.target.style.borderColor = '#ccc';
+                            }}
+                        >
+                            <FaChevronDown size={12} />
+                            Afficher le message de bienvenue
+                        </button>
                     </div>
-                </section>
+                )}
 
                 {/* Modules d'archivage */}
                 <section className="modules-section">
@@ -148,25 +288,38 @@ const HomeScreen = () => {
                         <p>Sélectionnez le module correspondant à votre type de documents</p>
                     </div>
 
-                    <div className="modules-grid">
-                        <ModuleCard
-                            title="Archivage Ordinaire"
-                            description="Gestion des documents administratifs courants, correspondances, rapports, circulaires et documents généraux de l'administration"
-                            icon={<FaArchive />}
-                            color="#2E86C1"
-                            stats={{ total: 1247, monthly: 42 }}
-                            moduleType="ad"
-                        />
+                    {loading ? (
+                        <div className="text-center py-5">
+                            <FaSpinner className="fa-spin text-primary" size={50} />
+                            <p className="mt-3">Chargement des modules...</p>
+                        </div>
+                    ) : (
+                        <div className="modules-grid">
+                            <ModuleCard
+                                title="Archivage Ordinaire"
+                                description="Gestion des documents administratifs courants, correspondances, rapports, circulaires et documents généraux de l'administration"
+                                icon={<FaArchive />}
+                                color="#2E86C1"
+                                stats={{ 
+                                    total: stats.modules.ad.total, 
+                                    monthly: stats.modules.ad.monthly 
+                                }}
+                                moduleType="ad"
+                            />
 
-                        <ModuleCard
-                            title="Archivage Note de Perception"
-                            description="Gestion spécialisée des notes de perception, quittances, documents financiers et pièces comptables"
-                            icon={<FaFileInvoiceDollar />}
-                            color="#28B463"
-                            stats={{ total: 589, monthly: 23 }}
-                            moduleType="np"
-                        />
-                    </div>
+                            <ModuleCard
+                                title="Archivage Note de Perception"
+                                description="Gestion spécialisée des notes de perception, quittances, documents financiers et pièces comptables"
+                                icon={<FaFileInvoiceDollar />}
+                                color="#28B463"
+                                stats={{ 
+                                    total: stats.modules.np.total, 
+                                    monthly: stats.modules.np.monthly 
+                                }}
+                                moduleType="np"
+                            />
+                        </div>
+                    )}
                 </section>
 
                 {/* Statistiques générales */}
@@ -177,47 +330,53 @@ const HomeScreen = () => {
                         <p>Aperçu de l'activité d'archivage</p>
                     </div>
 
-                    <div className="stats-grid">
-                        <div className="stat-card stat-card-primary">
-                            <div className="stat-icon">
-                                <FaArchive />
-                            </div>
-                            <div className="stat-content">
-                                <h3>1,836</h3>
-                                <p>Documents archivés au total</p>
-                            </div>
+                    {loading ? (
+                        <div className="text-center py-4">
+                            <FaSpinner className="fa-spin text-primary" size={40} />
                         </div>
+                    ) : (
+                        <div className="stats-grid">
+                            <div className="stat-card stat-card-primary">
+                                <div className="stat-icon">
+                                    <FaArchive />
+                                </div>
+                                <div className="stat-content">
+                                    <h3>{formatNumber(stats.total_archives)}</h3>
+                                    <p>Documents archivés au total</p>
+                                </div>
+                            </div>
 
-                        <div className="stat-card stat-card-success">
-                            <div className="stat-icon">
-                                <FaUpload />
+                            <div className="stat-card stat-card-success">
+                                <div className="stat-icon">
+                                    <FaUpload />
+                                </div>
+                                <div className="stat-content">
+                                    <h3>{formatNumber(stats.archivages_mois)}</h3>
+                                    <p>Archivages ce mois-ci</p>
+                                </div>
                             </div>
-                            <div className="stat-content">
-                                <h3>65</h3>
-                                <p>Archivages ce mois-ci</p>
-                            </div>
-                        </div>
 
-                        <div className="stat-card stat-card-warning">
-                            <div className="stat-icon">
-                                <FaRegFileAlt />
+                            <div className="stat-card stat-card-warning">
+                                <div className="stat-icon">
+                                    <FaRegFileAlt />
+                                </div>
+                                <div className="stat-content">
+                                    <h3>{formatNumber(stats.documents_traitement)}</h3>
+                                    <p>Documents en traitement</p>
+                                </div>
                             </div>
-                            <div className="stat-content">
-                                <h3>18</h3>
-                                <p>Documents en traitement</p>
-                            </div>
-                        </div>
 
-                        <div className="stat-card stat-card-info">
-                            <div className="stat-icon">
-                                <FaFileContract />
-                            </div>
-                            <div className="stat-content">
-                                <h3>99.8%</h3>
-                                <p>Taux de disponibilité</p>
+                            <div className="stat-card stat-card-info">
+                                <div className="stat-icon">
+                                    <FaFileContract />
+                                </div>
+                                <div className="stat-content">
+                                    <h3>{stats.taux_disponibilite}%</h3>
+                                    <p>Taux de disponibilité</p>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </section>
 
                 {/* Fonctionnalités */}
@@ -319,7 +478,7 @@ const HomeScreen = () => {
 
                     <div className="footer-info">
                         <p className="footer-copyright">
-                            © {new Date().getFullYear()} DGRAD - République  Démocratique du Congo
+                            © {new Date().getFullYear()} DGRAD - République Démocratique du Congo
                         </p>
                         <p className="footer-version">
                             <FaShieldAlt className="mr-2" />

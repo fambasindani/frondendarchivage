@@ -1,5 +1,5 @@
 // screens/LoginScreen.jsx
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useHistory, Link } from "react-router-dom";
 import Swal from "sweetalert2";
@@ -7,569 +7,371 @@ import { API_BASE_URL } from "../config";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import logo from '../Images/Logo.png';
+import {
+    FaArchive,
+    FaFileInvoiceDollar,
+    FaChartBar,
+    FaDatabase,
+    FaLock,
+    FaSearch,
+    FaUpload,
+    FaBoxOpen,
+    FaBuilding,
+    FaRegGem,
+    FaUserLock,
+    FaCalendarAlt,
+    FaShieldAlt,
+    FaFileContract,
+    FaRegFileAlt,
+    FaSpinner,
+    FaTimes,
+    FaChevronDown,
+    FaSignInAlt,
+    FaEye,
+    FaEyeSlash,
+    FaEnvelope,
+    FaLock as FaLockIcon,
+    FaHome,
+    FaArrowCircleLeft
+} from "react-icons/fa";
 import "../style/LoginScreen.css";
 
 // Schema de validation avec Zod
 const loginSchema = z.object({
-  email: z.string()
-    .min(1, "L'email est requis")
-    .email("Email invalide")
-    .toLowerCase(),
-  password: z.string()
-    .min(1, "Le mot de passe est requis")
-    .min(6, "Le mot de passe doit contenir au moins 6 caractères"),
-  rememberMe: z.boolean().optional(),
+    email: z.string()
+        .min(1, "L'email est requis")
+        .email("Email invalide")
+        .toLowerCase(),
+    password: z.string()
+        .min(1, "Le mot de passe est requis")
+        .min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+    rememberMe: z.boolean().optional(),
 });
 
 const LoginScreen = () => {
-  const history = useHistory();
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loginError, setLoginError] = useState(null);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
+    const history = useHistory();
+    const [showPassword, setShowPassword] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [loginError, setLoginError] = useState(null);
+    const [selectedModule, setSelectedModule] = useState(null);
+    const [showModuleSelection, setShowModuleSelection] = useState(true);
+    const [currentTime, setCurrentTime] = useState("");
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isValid },
-    reset,
-    watch,
-  } = useForm({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      rememberMe: false,
-    },
-    mode: "onChange",
-  });
-
-  const formValues = watch();
-
-  const onSubmit = async (data) => {
-    console.log("Submit started with data:", data);
-    setIsSubmitting(true);
-    setLoginError(null);
-
-    try {
-      // IMPORTANT: Utilisez la bonne URL de votre API
-      const res = await axios.post(`${API_BASE_URL}/connexion`, {
-        email: data.email,
-        password: data.password,
-      });
-
-      // La structure de votre réponse
-      const responseData = res.data.data;
-      const { user, roles, permissions, departements, token, stats } = responseData;
-
-      // Stocker TOUTES les informations dans localStorage
-      
-      // 1. Informations de l'utilisateur
-      localStorage.setItem("utilisateur", JSON.stringify({
-        id: user.id,
-        nom: user.nom,
-        prenom: user.prenom,
-        full_name: user.full_name,
-        email: user.email,
-        statut: user.statut,
-        avatar: user.avatar,
-        datecreation: user.datecreation,
-        dernierconnection: user.dernierconnection
-      }));
-
-      // 2. Token
-      if (token) localStorage.setItem("token", token);
-
-      // 3. Rôles et permissions
-      localStorage.setItem("role", JSON.stringify(roles));
-      localStorage.setItem("permissions", JSON.stringify(permissions.codes));
-      localStorage.setItem("permissionlist", JSON.stringify(permissions));
-      localStorage.setItem("permissions_details", JSON.stringify(permissions.details));
-
-      // 4. Départements
-      localStorage.setItem("departements", JSON.stringify(departements));
-
-      // 5. Statistiques
-      localStorage.setItem("user_stats", JSON.stringify(stats));
-
-      // 6. Option "Se souvenir de moi"
-      if (data.rememberMe) {
-        localStorage.setItem("rememberMe", "true");
-      } else {
-        localStorage.removeItem("rememberMe");
-      }
-
-      // Message de succès personnalisé
-      Swal.fire({
-        icon: 'success',
-        title: 'Connexion réussie',
-        html: `
-          <div style="text-align: left;">
-            <p><strong>Bienvenue ${user.prenom} ${user.nom} !</strong></p>
-            <p>Vous êtes connecté en tant que <strong>${roles[0]?.nom || 'Utilisateur'}</strong></p>
-            <p>Vous avez accès à <strong>${permissions.codes.length} permissions</strong></p>
-            <p>Départements: <strong>${departements.map(d => d.sigle).join(', ')}</strong></p>
-          </div>
-        `,
-        timer: 3000,
-        timerProgressBar: true
-      });
-
-      // =============================================
-      // VOTRE LOGIQUE DE REDIRECTION (AMÉLIORÉE)
-      // =============================================
-      
-      // Récupérer le module depuis localStorage
-      const module = localStorage.getItem("archive_module");
-      
-      // Récupérer les permissions de l'utilisateur
-      const userPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
-
-      // Afficher les informations de debug dans la console
-      console.log('=== INFORMATIONS DE REDIRECTION ===');
-      console.log('Module demandé:', module);
-      console.log('Permissions utilisateur:', userPermissions);
-      console.log('====================================');
-
-      // Redirection selon votre logique
-      if (module === "ad") {
-        if (userPermissions.includes('archiv_doc')) {
-          console.log('✅ Accès autorisé au module admin (dashboard)');
-          history.push("/tableaudebord");
-        } else {
-          console.log('❌ Accès refusé au module admin - permission dashboard manquante');
-          Swal.fire({
-            icon: 'error',
-            title: 'Accès refusé',
-            text: "Vous n'avez pas la permission 'Achivage Document' pour accéder au module d'administration",
-            timer: 3000,
-            timerProgressBar: true
-          });
-          // Redirection vers une page par défaut ou on reste sur la page de connexion
-          // Vous pouvez décommenter la ligne ci-dessous si vous voulez rediriger
-          // history.push("/");
-        }
-      } else if (module === "np") {
-          history.push("/tableaudebordnote");
-        if (userPermissions.includes('note_perception')) {
-          console.log('✅ Accès autorisé au module note perception');
-          history.push("/tableaudebordnote");
-        } else {
-          console.log('❌ Accès refusé au module note perception - permission note_perception manquante');
-          Swal.fire({
-            icon: 'error',
-            title: 'Accès refusé',
-            text: "Vous n'avez pas la permission 'note_perception' pour accéder au module Note de Perception",
-            timer: 3000,
-            timerProgressBar: true
-          });
-          // Redirection vers une page par défaut ou on reste sur la page de connexion
-          // history.push("/");
-        }
-      } else {
-        // Module par défaut - redirection vers le dashboard si la permission existe
-        if (userPermissions.includes('archiv_doc')) {
-          console.log('✅ Redirection vers le dashboard par défaut');
-          history.push("/tableaudebord");
-        } else {
-          console.log('⚠️ Aucun module spécifique et pas de permission dashboard');
-          // Si pas de permission dashboard, on peut rediriger vers une autre page
-          // ou afficher un message
-          Swal.fire({
-            icon: 'info',
-            title: 'Information',
-            text: "Vous êtes connecté mais vous n'avez pas de module par défaut",
-            timer: 3000,
-            timerProgressBar: true
-          });
-          // Optionnel: rester sur la page de connexion ou rediriger vers une page d'accueil
-          // history.push("/");
-        }
-      }
-
-    } catch (error) {
-      console.error("Login error:", error);
-      
-      // Gestion des erreurs selon votre structure de réponse
-      if (error.response) {
-        const { status, data } = error.response;
-        
-        if (status === 401) {
-          setLoginError(data.message || "Email ou mot de passe incorrect");
-        } else if (status === 403) {
-          setLoginError(data.message || "Votre compte est inactif. Contactez l'administrateur.");
-        } else if (status === 422) {
-          // Erreurs de validation
-          if (data.errors) {
-            const firstError = Object.values(data.errors)[0]?.[0];
-            setLoginError(firstError || "Données invalides");
-          } else {
-            setLoginError("Données invalides");
-          }
-        } else {
-          setLoginError(data.message || "Une erreur s'est produite lors de la connexion");
-        }
-      } else if (error.request) {
-        setLoginError("Impossible de contacter le serveur. Vérifiez votre connexion.");
-      } else {
-        setLoginError("Une erreur s'est produite");
-      }
-
-      reset({ email: data.email, password: "", rememberMe: data.rememberMe });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const isLoading = isSubmitting;
-
-  const handleTestLogin = (email, password) => {
-    reset({
-      email,
-      password,
-      rememberMe: false,
+    const {
+        register,
+        handleSubmit,
+        formState: { errors, isValid },
+        reset,
+    } = useForm({
+        resolver: zodResolver(loginSchema),
+        defaultValues: {
+            email: "",
+            password: "",
+            rememberMe: false,
+        },
+        mode: "onChange",
     });
-    setTimeout(() => {
-      handleSubmit(onSubmit)();
-    }, 100);
-  };
 
-  const isLocalhost =
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1";
+    useEffect(() => {
+        // Vérifier si un module est déjà sélectionné
+        const module = localStorage.getItem("archive_module");
+        if (module) {
+            setSelectedModule(module);
+            setShowModuleSelection(false);
+        }
 
-  return (
-    <div className="login-page min-vh-100 bg-gradient-custom d-flex align-items-center justify-content-center p-3 p-md-4">
-      <div className="login-container w-100 max-w-4xl d-flex flex-column flex-lg-row rounded-lg shadow-lg overflow-hidden bg-white">
-        {/* Section gauche - Illustration */}
-        <div className="login-left col-lg-6 bg-gradient-left p-4 p-md-5 text-white d-flex flex-column">
-          <div className="flex-grow-1">
-            <div className="d-flex justify-content-between align-items-start mb-4">
-              <Link
-                to="/"
-                className="btn btn-outline-light btn-sm d-flex align-items-center"
-                style={{
-                  padding: "0.4rem 0.8rem",
-                  borderRadius: "20px",
-                  fontSize: "0.875rem"
-                }}
-              >
-                <i className="fas fa-arrow-left mr-2"></i>
-                Retour à l'accueil
-              </Link>
-              
-              <div className="badge badge-light text-primary px-3 py-2">
-                <i className="fas fa-lock mr-1"></i>
-                Sécurité maximale
-              </div>
-            </div>
+        // Mettre à jour l'heure (gardé en interne mais pas affiché)
+        const updateTime = () => {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            const dateString = now.toLocaleDateString('fr-FR', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            setCurrentTime(`${dateString} - ${timeString}`);
+        };
 
-            <div className="d-flex align-items-center mb-5">
-              <div className="login-logo-icon rounded-circle d-flex align-items-center justify-content-center mr-3">
-                <i className="fas fa-archive fa-2x"></i>
-              </div>
-              <div>
-                <h1 className="h2 font-weight-bold mb-0">GS-Archive</h1>
-                <p className="login-subtitle mb-0">Gestion des Archives</p>
-              </div>
-            </div>
+        updateTime();
+        const interval = setInterval(updateTime, 60000);
+        return () => clearInterval(interval);
+    }, []);
 
-            <div className="my-5">
-              <h2 className="h1 font-weight-bold mb-4">
-                Gérez vos archives<br />efficacement
-              </h2>
-              <p className="login-description">
-                Un système complet pour la gestion des documents, des archives et
-                de leur suivi.
-              </p>
-            </div>
+    const handleModuleSelect = (moduleType) => {
+        localStorage.setItem("archive_module", moduleType);
+        setSelectedModule(moduleType);
+        setShowModuleSelection(false);
+    };
 
-            <div className="row mt-5">
-              <div className="col-6 mb-3">
-                <div className="d-flex align-items-center">
-                  <div className="login-feature-icon rounded-circle d-flex align-items-center justify-content-center mr-3">
-                    <i className="fas fa-building"></i>
-                  </div>
-                  <div>
-                    <p className="h4 font-weight-bold mb-0">500+</p>
-                    <p className="login-feature-text small mb-0">Entreprises</p>
-                  </div>
-                </div>
-              </div>
-              <div className="col-6 mb-3">
-                <div className="d-flex align-items-center">
-                  <div className="login-feature-icon rounded-circle d-flex align-items-center justify-content-center mr-3">
-                    <i className="fas fa-shield-alt"></i>
-                  </div>
-                  <div>
-                    <p className="h4 font-weight-bold mb-0">100%</p>
-                    <p className="login-feature-text small mb-0">Sécurisé</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+    const handleBackToModules = () => {
+        setSelectedModule(null);
+        setShowModuleSelection(true);
+        localStorage.removeItem("archive_module");
+    };
 
-            {isLocalhost && (
-              <div className="login-debug mt-4 p-3 rounded">
-                <div className="d-flex align-items-center justify-content-between mb-2">
-                  <span className="small font-weight-medium">Debug Mode</span>
-                  <button
-                    onClick={() => setShowDebugInfo(!showDebugInfo)}
-                    className="btn btn-sm btn-light btn-outline-light"
-                  >
-                    {showDebugInfo ? "Masquer" : "Afficher"}
-                  </button>
-                </div>
-                {showDebugInfo && (
-                  <div className="small">
-                    <div className="d-flex justify-content-between mb-1">
-                      <span>Form Valid:</span>
-                      <span className={`badge ${isValid ? "badge-success" : "badge-danger"}`}>
-                        {isValid ? "Oui" : "Non"}
-                      </span>
+    const onSubmit = async (data) => {
+        setIsSubmitting(true);
+        setLoginError(null);
+
+        try {
+            const res = await axios.post(`${API_BASE_URL}/connexion`, {
+                email: data.email,
+                password: data.password,
+            });
+
+            const responseData = res.data.data;
+            const { user, roles, permissions, departements, token } = responseData;
+
+            // Stocker les informations
+            localStorage.setItem("utilisateur", JSON.stringify({
+                id: user.id,
+                nom: user.nom,
+                prenom: user.prenom,
+                full_name: user.full_name,
+                email: user.email,
+                statut: user.statut,
+                avatar: user.avatar
+            }));
+
+            if (token) localStorage.setItem("token", token);
+            localStorage.setItem("role", JSON.stringify(roles));
+            localStorage.setItem("permissions", JSON.stringify(permissions.codes));
+            localStorage.setItem("departements", JSON.stringify(departements));
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Connexion réussie',
+                text: `Bienvenue ${user.prenom} ${user.nom} !`,
+                timer: 2000,
+                timerProgressBar: true
+            });
+
+            // Redirection
+            const module = localStorage.getItem("archive_module");
+            const userPermissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+
+            if (module === "ad" && userPermissions.includes('archiv_doc')) {
+                history.push("/tableaudebord");
+            } else if (module === "np" && userPermissions.includes('note_perception')) {
+                history.push("/tableaudebordnote");
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Accès refusé',
+                    text: "Vous n'avez pas la permission pour ce module",
+                    timer: 2000
+                });
+            }
+
+        } catch (error) {
+            console.error("Login error:", error);
+            
+            if (error.response?.status === 401) {
+                setLoginError("Email ou mot de passe incorrect");
+            } else {
+                setLoginError("Une erreur s'est produite");
+            }
+
+            reset({ email: data.email, password: "", rememberMe: data.rememberMe });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleTestLogin = () => {
+        reset({
+            email: "pierrpapy@gmail.com",
+            password: "password",
+            rememberMe: false,
+        });
+        setTimeout(() => {
+            handleSubmit(onSubmit)();
+        }, 100);
+    };
+
+    return (
+        <div className="login-container">
+            {/* Plus de header du tout */}
+
+            {/* Contenu principal */}
+            <div className="login-main">
+                {/* Sélection des modules - Version maquette */}
+                {showModuleSelection && (
+                    <div className="module-selection">
+                        <h1 className="module-title">Bienvenue dans la plateforme d'Archivage</h1>
+                        
+                        {/* Logo centré comme dans la maquette */}
+                        <div className="logo-center">
+                            <img src={logo} alt="DGRAD" className="center-logo" />
+                        </div>
+
+                        <div className="blink">Sélectionnez un module pour continuer</div>
+                        
+                        <div className="modules-grid">
+                            {/* Module Archivage Ordinaire */}
+                            <div 
+                                className="module-card"
+                                onClick={() => handleModuleSelect("ad")}
+                            >
+                                <img src={logo} alt="Archivage" className="module-card-icon" />
+                                <h3>Archivage Ordinaire</h3>
+                                <p>Documents administratifs, correspondances, rapports</p>
+                                <button className="module-btn btn-blue">
+                                    Connexion ➜
+                                </button>
+                            </div>
+
+                            {/* Module Note de Perception */}
+                            <div 
+                                className="module-card"
+                                onClick={() => handleModuleSelect("np")}
+                            >
+                                <img src={logo} alt="Perception" className="module-card-icon" />
+                                <h3>Note de Perception</h3>
+                                <p>Documents financiers, quittances, pièces comptables</p>
+                                <button className="module-btn btn-green">
+                                    Connexion ➜
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="d-flex justify-content-between mb-1">
-                      <span>Email:</span>
-                      <span className="text-monospace">
-                        {formValues.email || "vide"}
-                      </span>
-                    </div>
-                    <div className="d-flex justify-content-between mb-1">
-                      <span>Password:</span>
-                      <span className="text-monospace">
-                        {"*".repeat(formValues.password?.length || 0)}
-                      </span>
-                    </div>
-                    <div className="pt-2 border-top border-white-20 mt-2">
-                      <p className="font-weight-medium mb-1">Test Accounts:</p>
-                      <div className="d-flex flex-column">
-                        <button
-                          onClick={() => handleTestLogin("pierrpapy@gmail.com", "password")}
-                          className="btn btn-sm btn-light btn-outline-light text-left mb-1"
-                        >
-                          Pierre (Directeur)
-                        </button>
-                        <button
-                          onClick={() => handleTestLogin("jean@example.com", "password")}
-                          className="btn btn-sm btn-light btn-outline-light text-left"
-                        >
-                          Jean (Utilisateur)
-                        </button>
-                      </div>
-                    </div>
-                  </div>
                 )}
-              </div>
-            )}
-          </div>
 
-          <div className="login-footer mt-4 pt-4 border-top">
-            <p className="login-copyright small mb-0">
-              © {new Date().getFullYear()} GS-Archive. Tous droits réservés.
-            </p>
-          </div>
-        </div>
+                {/* Formulaire de connexion */}
+                {!showModuleSelection && selectedModule && (
+                    <div className="login-form-wrapper">
+                        <button 
+                            className="back-button"
+                            onClick={handleBackToModules}
+                        >
+                            <FaArrowCircleLeft />
+                            Changer de module
+                        </button>
 
-        {/* Section droite - Formulaire */}
-        <div className="login-right col-lg-6 p-4 p-md-5">
-          <div className="h-100 d-flex flex-column justify-content-center">
-            <div className="login-form-container mx-auto w-100">
-              <div className="text-center mb-5">
-                <h2 className="h2 font-weight-bold text-dark mb-3">Connexion</h2>
-                <p className="text-muted mb-4">
-                  Entrez vos identifiants pour accéder à votre compte
-                </p>
-                
-                <div className="d-block d-lg-none mb-3">
-                  <Link
-                    to="/"
-                    className="btn btn-outline-primary btn-sm d-inline-flex align-items-center"
-                    style={{
-                      padding: "0.4rem 0.8rem",
-                      borderRadius: "20px",
-                      fontSize: "0.875rem"
-                    }}
-                  >
-                    <i className="fas fa-home mr-2"></i>
-                    Retour à l'accueil
-                  </Link>
-                </div>
-              </div>
+                        <div className="login-form-container">
+                            <div className="form-header">
+                                <div className="form-icon">
+                                    {selectedModule === "ad" ? <FaArchive size={24} /> : <FaFileInvoiceDollar size={24} />}
+                                </div>
+                                <h2>
+                                    {selectedModule === "ad" ? "Archivage Ordinaire" : "Note de Perception"}
+                                </h2>
+                                <p>Connectez-vous avec vos identifiants DGRAD</p>
+                            </div>
 
-              {loginError && (
-                <div className="alert alert-danger d-flex align-items-center mb-4 p-3">
-                  <i className="fas fa-exclamation-circle mr-2"></i>
-                  <span className="small">{loginError}</span>
-                </div>
-              )}
+                            {loginError && (
+                                <div className="alert alert-danger">
+                                    {loginError}
+                                </div>
+                            )}
 
-              <form onSubmit={handleSubmit(onSubmit)}>
-                <div className="form-group mb-4">
-                  <label className="form-label font-weight-medium text-dark mb-2 d-block">
-                    Adresse email
-                  </label>
-                  <div className="input-group login-input-group">
-                    <div className="input-group-prepend">
-                      <span className="input-group-text login-input-icon">
-                        <i className="fas fa-envelope"></i>
-                      </span>
+                            <form onSubmit={handleSubmit(onSubmit)}>
+                                <div className="form-group">
+                                    <label>Email</label>
+                                    <div className="input-group">
+                                        <span className="input-icon">
+                                            <FaEnvelope size={16} />
+                                        </span>
+                                        <input
+                                            type="email"
+                                            className={errors.email ? "error" : ""}
+                                            placeholder="email@dgrad.cd"
+                                            disabled={isSubmitting}
+                                            {...register("email")}
+                                        />
+                                    </div>
+                                    {errors.email && (
+                                        <span className="error-message">{errors.email.message}</span>
+                                    )}
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Mot de passe</label>
+                                    <div className="input-group">
+                                        <span className="input-icon">
+                                            <FaLockIcon size={16} />
+                                        </span>
+                                        <input
+                                            type={showPassword ? "text" : "password"}
+                                            className={errors.password ? "error" : ""}
+                                            placeholder="••••••••"
+                                            disabled={isSubmitting}
+                                            {...register("password")}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="password-toggle"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                        >
+                                            {showPassword ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+                                        </button>
+                                    </div>
+                                    {errors.password && (
+                                        <span className="error-message">{errors.password.message}</span>
+                                    )}
+                                </div>
+
+                                <div className="form-options">
+                                    <label className="checkbox">
+                                        <input
+                                            type="checkbox"
+                                            {...register("rememberMe")}
+                                        />
+                                        <span>Se souvenir de moi</span>
+                                    </label>
+                                    <Link to="#" className="forgot-link">
+                                        Mot de passe oublié?
+                                    </Link>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    className="submit-button"
+                                    disabled={isSubmitting || !isValid}
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <FaSpinner className="spin" />
+                                            Connexion...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FaSignInAlt />
+                                            Se connecter
+                                        </>
+                                    )}
+                                </button>
+                            </form>
+
+                            {/* Bouton de test en dev */}
+                            {process.env.NODE_ENV === 'development' && (
+                                <button
+                                    onClick={handleTestLogin}
+                                    className="test-button"
+                                >
+                                    Test: Pierre (DF)
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <input
-                      type="email"
-                      className={`form-control login-input ${errors.email ? "is-invalid" : ""}`}
-                      placeholder="email@entreprise.com"
-                      disabled={isLoading}
-                      {...register("email")}
-                    />
-                  </div>
-                  {errors.email && (
-                    <div className="invalid-feedback d-block mt-2">
-                      <i className="fas fa-exclamation-circle mr-1"></i>
-                      {errors.email.message}
-                    </div>
-                  )}
-                </div>
-
-                <div className="form-group mb-4">
-                  <label className="form-label font-weight-medium text-dark mb-2 d-block">
-                    Mot de passe
-                  </label>
-                  <div className="input-group login-input-group">
-                    <div className="input-group-prepend">
-                      <span className="input-group-text login-input-icon">
-                        <i className="fas fa-lock"></i>
-                      </span>
-                    </div>
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      className={`form-control login-input ${errors.password ? "is-invalid" : ""}`}
-                      placeholder="••••••••"
-                      disabled={isLoading}
-                      {...register("password")}
-                    />
-                    <div className="input-group-append">
-                      <button
-                        type="button"
-                        className="input-group-text login-input-icon"
-                        onClick={() => setShowPassword(!showPassword)}
-                        disabled={isLoading}
-                        style={{ cursor: "pointer" }}
-                      >
-                        <i className={`fas fa-${showPassword ? "eye-slash" : "eye"}`}></i>
-                      </button>
-                    </div>
-                  </div>
-                  {errors.password && (
-                    <div className="invalid-feedback d-block mt-2">
-                      <i className="fas fa-exclamation-circle mr-1"></i>
-                      {errors.password.message}
-                    </div>
-                  )}
-                </div>
-
-                <div className="d-flex justify-content-between align-items-center mb-4">
-                  <div className="form-check">
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      id="remember-me"
-                      disabled={isLoading}
-                      {...register("rememberMe")}
-                    />
-                    <label
-                      className="form-check-label text-muted ml-2"
-                      htmlFor="remember-me"
-                      style={{ cursor: "pointer" }}
-                    >
-                      Se souvenir de moi
-                    </label>
-                  </div>
-
-                  <Link
-                    to="/mot-de-passe-oublie"
-                    className="login-link text-decoration-none"
-                    onClick={(e) => isLoading && e.preventDefault()}
-                  >
-                    <small>Mot de passe oublié?</small>
-                  </Link>
-                </div>
-
-                <button
-                  type="submit"
-                  className="login-btn btn btn-primary btn-lg w-100 py-3"
-                  disabled={isLoading || !isValid}
-                >
-                  {isLoading ? (
-                    <>
-                      <span
-                        className="spinner-border spinner-border-sm mr-2"
-                        role="status"
-                        aria-hidden="true"
-                      ></span>
-                      Connexion en cours...
-                    </>
-                  ) : (
-                    <>
-                      <i className="fas fa-sign-in-alt mr-2"></i>
-                      Se connecter
-                    </>
-                  )}
-                </button>
-              </form>
-
-              <div className="text-center mt-5 pt-3">
-                <p className="text-muted mb-3">
-                  Pas encore de compte?{" "}
-                  <Link
-                    to="/register"
-                    className="login-link font-weight-medium text-decoration-none"
-                    onClick={(e) => isLoading && e.preventDefault()}
-                  >
-                    Créer un compte
-                  </Link>
-                </p>
-
-                <div className="border-top pt-3">
-                  <p className="small text-muted mb-3">
-                    En vous connectant, vous acceptez nos{" "}
-                    <a
-                      href="#"
-                      className="login-link text-decoration-none"
-                      onClick={(e) => isLoading && e.preventDefault()}
-                    >
-                      conditions d'utilisation
-                    </a>{" "}
-                    et notre{" "}
-                    <a
-                      href="#"
-                      className="login-link text-decoration-none"
-                      onClick={(e) => isLoading && e.preventDefault()}
-                    >
-                      politique de confidentialité
-                    </a>
-                    .
-                  </p>
-
-                  <Link
-                    to="/"
-                    className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center"
-                    style={{
-                      padding: "0.5rem 1rem",
-                      borderRadius: "20px",
-                      fontSize: "0.875rem"
-                    }}
-                  >
-                    <i className="fas fa-arrow-circle-left mr-2"></i>
-                    Retour à l'accueil
-                  </Link>
-                </div>
-              </div>
+                )}
             </div>
-          </div>
+
+            {/* Footer */}
+            <div className="login-footer">
+                <p>© {new Date().getFullYear()} DGRAD - Tous droits réservés</p>
+                <p>
+                    <FaLock size={12} />
+                    Environnement sécurisé
+                </p>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default LoginScreen;

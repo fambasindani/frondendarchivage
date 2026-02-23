@@ -24,7 +24,8 @@ const FileUploadModal = ({
     documentId,
     onClose,
     token,
-    id_classeur
+    id_classeur,
+    nom_fichier
 }) => {
     const [uploadedFiles, setUploadedFiles] = useState([]);
     const [loadingExistingFiles, setLoadingExistingFiles] = useState(true);
@@ -33,14 +34,14 @@ const FileUploadModal = ({
     const [showScannerConfig, setShowScannerConfig] = useState(false);
     const [scanInProgress, setScanInProgress] = useState(false);
     const [lastScanTime, setLastScanTime] = useState(null);
-    const [newFilesNotification, setNewFilesNotification] = useState(null);
     const [scanTimeoutId, setScanTimeoutId] = useState(null);
     
     const scannerConfig = {
         apiUrl: API_BASE_URL,
         token: token,
         idDeclaration: documentId,
-        idClasseur: id_classeur
+        idClasseur: id_classeur,
+        nom_fichier: nom_fichier
     };
 
     const pollingIntervalRef = useRef(null);
@@ -54,7 +55,6 @@ const FileUploadModal = ({
         console.log("=== FILE UPLOAD MODAL PROPS ===");
         console.log("documentId:", documentId);
         console.log("id_classeur:", id_classeur);
-       
         console.log("token présent:", !!token);
     }, [documentId, id_classeur, token]);
 
@@ -116,10 +116,10 @@ const FileUploadModal = ({
             if (res.data && Array.isArray(res.data)) {
                 const newFiles = res.data.map(f => ({
                     id: f.id,
-                    name: f.nom_native || f.nom_fichier || f.name,
+                    nom: f.nom_native || f.nom_fichier || f.nom || 'Sans nom',
                     url: `${API_BASE_URL}/documents-declaration/download/${f.id}`,
-                    created_at: f.created_at || f.upload_date,
-                    size: f.taille,
+                    created_at: f.created_at || f.upload_date || new Date().toISOString(),
+                    size: f.taille || f.size || 0,
                     type: f.type || 'application/pdf'
                 }));
 
@@ -131,12 +131,8 @@ const FileUploadModal = ({
                 const newCount = newFiles.length;
                 
                 if (newCount > currentCount) {
-                    // Des nouveaux fichiers sont arrivés !
                     const addedFiles = newFiles.slice(0, newCount - currentCount);
                     console.log(`🎉 ${addedFiles.length} nouveau(x) fichier(s) détecté(s) !`);
-                    
-                    // Afficher une notification
-                    showNewFilesNotification(addedFiles);
                     
                     // Si un scan était en cours, le terminer
                     if (scanInProgress) {
@@ -182,7 +178,7 @@ const FileUploadModal = ({
         stopPolling();
         startPolling();
         
-        // Afficher une notification de succès
+        // Afficher une notification de succès (optionnel, on peut laisser)
         Swal.fire({
             icon: 'success',
             title: 'Scan terminé !',
@@ -193,24 +189,6 @@ const FileUploadModal = ({
             timer: 4000,
             timerProgressBar: true
         });
-    };
-
-    // 🔹 Afficher une notification pour les nouveaux fichiers
-    const showNewFilesNotification = (newFiles) => {
-        if (newFiles.length > 0) {
-            const notification = {
-                id: Date.now(),
-                files: newFiles,
-                timestamp: new Date()
-            };
-            
-            setNewFilesNotification(notification);
-            
-            // Auto-supprimer la notification après 5 secondes
-            setTimeout(() => {
-                setNewFilesNotification(null);
-            }, 5000);
-        }
     };
 
     // 🔹 Fonction pour uploader plusieurs fichiers
@@ -270,10 +248,10 @@ const FileUploadModal = ({
                 
                 const newFiles = uploadedDocuments.map((doc, index) => ({
                     id: doc.id,
-                    name: doc.nom_native || doc.nom_fichier || pdfFiles[index]?.name,
+                    nom: doc.nom_native || doc.nom || pdfFiles[index]?.name || 'Sans nom',
                     url: `${API_BASE_URL}/documents-declaration/download/${doc.id}`,
                     created_at: doc.created_at || new Date().toISOString(),
-                    size: doc.size || pdfFiles[index]?.size,
+                    size: doc.size || pdfFiles[index]?.size || 0,
                     type: doc.type || 'application/pdf'
                 }));
 
@@ -408,7 +386,8 @@ const FileUploadModal = ({
             const infoResult = await scannerService.setDocumentInfo(
                 scannerConfig.idDeclaration,
                 scannerConfig.idClasseur,
-                scannerConfig.token
+                scannerConfig.token,
+                scannerConfig.nom_fichier
             );
             
             if (!infoResult.success) {
@@ -581,7 +560,7 @@ const FileUploadModal = ({
             html: `
                 <div class="text-center">
                     <FaFilePdf className="text-danger mb-3" style="font-size: 3rem;" />
-                    <p><strong>"${file.name}"</strong></p>
+                    <p><strong>"${file.nom}"</strong></p>
                     <p class="small text-muted">Cette action est irréversible</p>
                 </div>
             `,
@@ -610,7 +589,7 @@ const FileUploadModal = ({
                 Swal.fire({
                     icon: 'success',
                     title: 'Supprimé!',
-                    text: `"${file.name}" a été supprimé avec succès`,
+                    text: `"${file.nom}" a été supprimé avec succès`,
                     timer: 2000,
                     showConfirmButton: false
                 });
@@ -684,33 +663,6 @@ const FileUploadModal = ({
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
-    // 🔹 Composant de notification pour nouveaux fichiers
-    const NewFilesNotification = ({ notification }) => {
-        if (!notification) return null;
-        
-        return (
-            <div className="alert alert-success alert-dismissible fade show mb-3" role="alert">
-                <FaBell className="mr-2" />
-                <strong>{notification.files.length} nouveau(x) fichier(s) !</strong>
-                <button 
-                    type="button" 
-                    className="close" 
-                    onClick={() => setNewFilesNotification(null)}
-                >
-                    <span>&times;</span>
-                </button>
-                <div className="small mt-1">
-                    {notification.files.slice(0, 2).map((file, idx) => (
-                        <div key={idx}>• {file.name}</div>
-                    ))}
-                    {notification.files.length > 2 && (
-                        <div>... et {notification.files.length - 2} autre(s)</div>
-                    )}
-                </div>
-            </div>
-        );
-    };
-
     if (!documentId) {
         return (
             <div className="modal-backdrop fade show">
@@ -769,9 +721,6 @@ const FileUploadModal = ({
                         </div>
 
                         <div className="modal-body">
-                            {/* Notification des nouveaux fichiers */}
-                            <NewFilesNotification notification={newFilesNotification} />
-
                             {/* Indicateur de scan en cours */}
                             {scanInProgress && (
                                 <div className="alert alert-info d-flex align-items-center mb-3">
@@ -791,14 +740,6 @@ const FileUploadModal = ({
                                 </div>
                             )}
 
-                            {/* Dernier scan */}
-                            {lastScanTime && !scanInProgress && (
-                                <div className="alert alert-success mb-3">
-                                    <FaCheckCircle className="mr-2" />
-                                    <strong>Dernier scan :</strong> {formatDate(lastScanTime)}
-                                </div>
-                            )}
-
                             {/* Section fichiers existants */}
                             <div className="mb-4">
                                 <div className="d-flex justify-content-between align-items-center mb-3">
@@ -813,7 +754,7 @@ const FileUploadModal = ({
                                             disabled={loadingExistingFiles || uploading}
                                             title="Rafraîchir manuellement"
                                         >
-                                            <FaSpinner className={loadingExistingFiles ? 'fa-spin mr-1' : 'd-none'} />
+                                            <FaSpinner className={loadingExistingFiles ? 'fa-spin mr-1' : ''} />
                                             Actualiser
                                         </button>
                                         <button 
@@ -849,7 +790,7 @@ const FileUploadModal = ({
                                                             <div className="d-flex align-items-center">
                                                                 <FaFilePdf className="text-danger mr-2" />
                                                                 <span className="font-weight-bold text-truncate" style={{ maxWidth: '300px' }}>
-                                                                    {file.name}
+                                                                    {file.nom}
                                                                 </span>
                                                             </div>
                                                         </td>

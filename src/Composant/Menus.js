@@ -299,7 +299,7 @@ const Menus = () => {
             )}
 
             {/* Documents - visible seulement pour "ad" ET permission archiv_doc */}
-            {(entreprise === "ad" && hasPermission('archiv_doc')) && (
+            {(entreprise === "ad" && hasPermission('archiv_doc') && hasPermission('acceder_au__document')) && (
               <li className="nav-item">
                 <Link 
                   to="/document" 
@@ -316,7 +316,7 @@ const Menus = () => {
             )}
 
             {/* Notes de Perception - visible seulement pour "np" ET permission note_perception */}
-            {(entreprise === "np" && hasPermission('note_perception')) && (
+            {(entreprise === "np" && hasPermission('note_perception') && hasPermission('acceder_au_note_perception')) && (
               <li className="nav-item">
                 <Link 
                   to="/note-perception" 

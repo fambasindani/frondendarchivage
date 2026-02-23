@@ -12,28 +12,28 @@ import { FaArrowLeft, FaFileAlt, FaSpinner } from 'react-icons/fa';
 const FormDocumentScreen = () => {
   const history = useHistory();
   const token = GetTokenOrRedirect();
-  
+
   // Fonction améliorée pour extraire l'ID
   const getCurrentId = () => {
     const path = window.location.pathname;
     console.log("Path actuel:", path);
-    
+
     // Extraire l'ID de /archive/addform/10
     const match = path.match(/\/archive\/addform\/(\d+)$/);
-    
+
     if (match && match[1]) {
       const id = parseInt(match[1], 10);
       console.log("ID extrait:", id);
       return id;
     }
-    
+
     console.log("Aucun ID trouvé - mode création");
     return null;
   };
-  
+
   const id = getCurrentId();
   const isEditing = !!id;
-  
+
   console.log("=== DEBUG ===");
   console.log("URL complète:", window.location.href);
   console.log("ID détecté:", id);
@@ -59,21 +59,39 @@ const FormDocumentScreen = () => {
         // 1. Charger les listes dropdown
         console.log("Chargement des listes dropdown...");
         const [directionsRes, emplacementsRes, classeursRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/departements`, { 
-            headers: { Authorization: `Bearer ${token}` } 
+          axios.get(`${API_BASE_URL}/departements`, {
+            headers: { Authorization: `Bearer ${token}` }
           }),
-          axios.get(`${API_BASE_URL}/emplacement`, { 
-            headers: { Authorization: `Bearer ${token}` } 
+          axios.get(`${API_BASE_URL}/emplacement`, {
+            headers: { Authorization: `Bearer ${token}` }
           }),
-          axios.get(`${API_BASE_URL}/classeur`, { 
-            headers: { Authorization: `Bearer ${token}` } 
+          axios.get(`${API_BASE_URL}/classeur`, {
+            headers: { Authorization: `Bearer ${token}` }
           }),
         ]);
 
         setDirections(directionsRes.data.data.data);
+
+
+        // CE QUE VOUS DEVEZ FAIRE MAINTENANT (même pattern)
+        const userDepartements = JSON.parse(localStorage.getItem("departements")) || [];
+
+        const filteredDirections = directionsRes.data.data.data.filter(direction =>
+          userDepartements.some(userDept => userDept.id === direction.id)
+        );
+
+        setDirections(filteredDirections);
+
+
+
+
         setEmplacements(emplacementsRes.data);
-        setClasseurs(classeursRes.data);
-        
+        const filteredClasseurs = classeursRes.data.filter(
+          classeur => classeur.nom_classeur !== "Note de Perception"
+        );
+        setClasseurs(filteredClasseurs);
+        // setClasseurs(classeursRes.data);
+
         console.log("Listes chargées:");
         console.log("- Directions:", directionsRes.data.length);
         console.log("- Emplacements:", emplacementsRes.data.length);
@@ -84,58 +102,58 @@ const FormDocumentScreen = () => {
           try {
             console.log(`Tentative de chargement du document ID ${id}...`);
             console.log(`URL API: ${API_BASE_URL}/editdeclaration/${id}`);
-            
+
             const documentRes = await axios.get(
-              `${API_BASE_URL}/editdeclaration/${id}`, 
+              `${API_BASE_URL}/editdeclaration/${id}`,
               {
-                headers: { 
-                  Authorization: `Bearer ${token}` 
+                headers: {
+                  Authorization: `Bearer ${token}`
                 }
               }
             );
-            
+
             console.log("✅ Document chargé avec succès:", documentRes.data);
-            
+
             // NOUVEAU : Transformer les données pour extraire seulement les IDs
             const documentData = documentRes.data;
-            
+
             // Si les champs relationnels sont des objets, extraire seulement les IDs
             const transformedData = {
               ...documentData,
-              id_direction: documentData.id_direction 
-                ? (typeof documentData.id_direction === 'object' 
-                    ? documentData.id_direction.id 
-                    : documentData.id_direction)
+              id_direction: documentData.id_direction
+                ? (typeof documentData.id_direction === 'object'
+                  ? documentData.id_direction.id
+                  : documentData.id_direction)
                 : "",
-              id_emplacement: documentData.id_emplacement 
-                ? (typeof documentData.id_emplacement === 'object' 
-                    ? documentData.id_emplacement.id 
-                    : documentData.id_emplacement)
+              id_emplacement: documentData.id_emplacement
+                ? (typeof documentData.id_emplacement === 'object'
+                  ? documentData.id_emplacement.id
+                  : documentData.id_emplacement)
                 : "",
-              id_classeur: documentData.id_classeur 
-                ? (typeof documentData.id_classeur === 'object' 
-                    ? documentData.id_classeur.id 
-                    : documentData.id_classeur)
+              id_classeur: documentData.id_classeur
+                ? (typeof documentData.id_classeur === 'object'
+                  ? documentData.id_classeur.id
+                  : documentData.id_classeur)
                 : "",
-              id_user: documentData.id_user 
-                ? (typeof documentData.id_user === 'object' 
-                    ? documentData.id_user.id 
-                    : documentData.id_user)
+              id_user: documentData.id_user
+                ? (typeof documentData.id_user === 'object'
+                  ? documentData.id_user.id
+                  : documentData.id_user)
                 : "",
             };
-            
+
             console.log("Données transformées:", transformedData);
             setDocumentToEdit(transformedData);
-            
+
           } catch (error) {
             console.error("❌ Erreur lors du chargement du document:", error);
-            
+
             if (error.response) {
               console.error("Status:", error.response.status);
               console.error("Data:", error.response.data);
               console.error("Headers:", error.response.headers);
             }
-            
+
             Swal.fire({
               icon: 'error',
               title: 'Document introuvable',
@@ -191,10 +209,10 @@ const FormDocumentScreen = () => {
   };
 
   const handleSuccess = () => {
-    const message = isEditing 
+    const message = isEditing
       ? 'Document modifié avec succès'
       : 'Document ajouté avec succès';
-    
+
     Swal.fire({
       title: 'Succès !',
       text: message,
@@ -227,7 +245,7 @@ const FormDocumentScreen = () => {
               </div>
             </div>
           </div>
-          
+
           <section className="content">
             <div className="container-fluid">
               <div className="row">
@@ -239,13 +257,13 @@ const FormDocumentScreen = () => {
                         {isEditing ? 'Chargement du document...' : 'Préparation du formulaire...'}
                       </h4>
                       <p className="text-muted">
-                        {isEditing 
-                          ? `Chargement du document ID: ${id}` 
+                        {isEditing
+                          ? `Chargement du document ID: ${id}`
                           : 'Initialisation en cours...'}
                       </p>
                       <div className="mt-3">
                         <small className="text-muted">
-                          {isEditing 
+                          {isEditing
                             ? `URL: ${API_BASE_URL}/editdeclaration/${id}`
                             : 'Mode création'}
                         </small>
@@ -275,8 +293,8 @@ const FormDocumentScreen = () => {
                   {isEditing ? "Modifier le Document" : "Nouveau Document"}
                 </h1>
                 <p className="text-muted mb-0">
-                  {isEditing 
-                    ? `Modification du document ID: ${id}` 
+                  {isEditing
+                    ? `Modification du document ID: ${id}`
                     : "Remplissez le formulaire pour ajouter un document"}
                 </p>
               </div>
@@ -286,7 +304,7 @@ const FormDocumentScreen = () => {
                     className="btn btn-outline-secondary"
                     onClick={handleCancel}
                   >
-                    <FaArrowLeft className="mr-2" /> Retour à la liste 
+                    <FaArrowLeft className="mr-2" /> Retour à la liste
                   </button>
                 </div>
               </div>

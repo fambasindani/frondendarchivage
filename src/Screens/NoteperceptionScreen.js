@@ -22,11 +22,12 @@ import {
   FaFolder
 } from 'react-icons/fa';
 import LoadingSpinner from "../Loading/LoadingSpinner";
+import FileUploadModal from "../Modals/FileUploadModal"; // 👈 Import ajouté
 
 const NoteperceptionScreen = () => {
   const token = GetTokenOrRedirect();
   const utilisateur = JSON.parse(localStorage.getItem("utilisateur"));
-  //const role = utilisateur?.role || "";
+  // const role = utilisateur?.role || "";
   const role = JSON.parse(localStorage.getItem("role"));
   const id_centre = utilisateur?.id_centre || "";
 
@@ -43,6 +44,10 @@ const NoteperceptionScreen = () => {
   const [modeRecherche, setModeRecherche] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // États pour le modal d'upload
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [selectedNoteForUpload, setSelectedNoteForUpload] = useState(null);
 
   // Statistiques
   const [statsCards, setStatsCards] = useState([
@@ -83,6 +88,12 @@ const NoteperceptionScreen = () => {
 
   const handleViewNote = (note) => {
     history.push(`/note/detail/${note.id}`);
+  };
+
+  // Fonction d'ouverture du modal d'upload
+  const handleUploadClick = (note) => {
+    setSelectedNoteForUpload(note);
+    setShowUploadModal(true);
   };
 
   // Chargement des notes
@@ -287,12 +298,10 @@ const NoteperceptionScreen = () => {
         onClick: () => handleEditNote(note)
       },
       {
-        label: "Télécharger",
+        label: "Gérer fichiers", // ⬅️ Action modifiée pour ouvrir le modal
         icon: <FaDownload />,
         color: "secondary",
-        onClick: () => {
-          //.open(`${API_BASE_URL}/notes/${note.id}/download`, '_blank');
-        }
+        onClick: () => handleUploadClick(note)
       },
       {
         label: "Supprimer",
@@ -597,6 +606,18 @@ const NoteperceptionScreen = () => {
           </div>
         </section>
       </div>
+
+      {/* Modal d'upload */}
+      {showUploadModal && selectedNoteForUpload && (
+        <FileUploadModal
+          documentId={selectedNoteForUpload.id}
+          id_classeur={selectedNoteForUpload.id_classeur || selectedNoteForUpload.classeur?.id}
+          onClose={() => setShowUploadModal(false)}
+          token={token}
+          nom_fichier="note de perecption"
+
+        />
+      )}
     </div>
   );
 };

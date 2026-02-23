@@ -481,6 +481,7 @@ const FormDocument = ({
         onUploadComplete={handleFilesUploadComplete}
         token={token}
         existingFiles={filePreviews}
+        nom_fichier={formData.intitule}
     />
 )}
 

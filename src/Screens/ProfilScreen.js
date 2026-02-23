@@ -1,3 +1,4 @@
+// screens/ProfilScreen.jsx
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
@@ -30,7 +31,8 @@ import {
   FaTimes,
   FaSave,
   FaKey,
-  FaCheckDouble
+  FaCheckDouble,
+  FaLockOpen
 } from "react-icons/fa";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -61,6 +63,7 @@ const ProfilScreen = () => {
     nom: "",
     prenom: "",
     email: "",
+    current_password: "", // 🔹 NOUVEAU : ancien mot de passe
     password: "",
     password_confirmation: "",
     avatar: null
@@ -81,7 +84,6 @@ const ProfilScreen = () => {
 
   // 🔹 Charger les données utilisateur depuis l'API
   useEffect(() => {
-   //alert(user.avatar_url) 
     if (token) {
       fetchUserProfile();
     }
@@ -107,6 +109,7 @@ const ProfilScreen = () => {
         nom: user.nom || "",
         prenom: user.prenom || "",
         email: user.email || "",
+        current_password: "", // 🔹 NOUVEAU
         password: "",
         password_confirmation: "",
         avatar: null
@@ -121,7 +124,7 @@ const ProfilScreen = () => {
     Accept: "application/json"
   });
 
-  // 🔹 Récupérer le profil utilisateur - CORRIGÉ AVEC LA BONNE ROUTE
+  // 🔹 Récupérer le profil utilisateur
   const fetchUserProfile = async () => {
     setLoading(true);
     try {
@@ -310,8 +313,8 @@ const ProfilScreen = () => {
     document.getElementById('avatar-input').value = '';
   };
 
-  // 🔹 Soumettre le formulaire (modal)
-  const handleSubmit = async (e) => {
+  // 🔹 Soumettre le formulaire (modal) - AVEC ANCIEN MOT DE PASSE OBLIGATOIRE
+ const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setErrors({});
@@ -321,10 +324,58 @@ const ProfilScreen = () => {
       return;
     }
 
+    // 🔹 VALIDATION SPÉCIALE POUR LE MOT DE PASSE
+    if (formData.password || formData.password_confirmation) {
+      // Vérifier que l'ancien mot de passe est fourni
+      if (!formData.current_password) {
+        setErrors(prev => ({
+          ...prev,
+          current_password: "L'ancien mot de passe est requis pour changer le mot de passe"
+        }));
+        setSubmitting(false);
+        return;
+      }
+
+      // Vérifier que les mots de passe correspondent
+      if (formData.password !== formData.password_confirmation) {
+        setErrors(prev => ({
+          ...prev,
+          password_confirmation: "Les mots de passe ne correspondent pas"
+        }));
+        setSubmitting(false);
+        return;
+      }
+
+      // Vérifier la longueur minimale
+      if (formData.password.length < 6) {
+        setErrors(prev => ({
+          ...prev,
+          password: "Le mot de passe doit contenir au moins 6 caractères"
+        }));
+        setSubmitting(false);
+        return;
+      }
+    }
+
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('_method', 'PUT');
       
+      // 🔹 TOUJOURS ENVOYER L'ANCIEN MOT DE PASSE SI NOUVEAU MOT DE PASSE FOURNI
+      if (formData.password) {
+        formDataToSend.append('current_password', formData.current_password);
+        formDataToSend.append('password', formData.password);
+        // 🔥 AJOUTER PASSWORD_CONFIRMATION ICI 🔥
+        formDataToSend.append('password_confirmation', formData.password_confirmation);
+        
+        console.log('Données mot de passe envoyées:', {
+          current_password: formData.current_password,
+          password: formData.password,
+          password_confirmation: formData.password_confirmation
+        });
+      }
+      
+      // Autres champs
       if (formData.nom !== user.nom) {
         formDataToSend.append('nom', formData.nom);
       }
@@ -334,13 +385,18 @@ const ProfilScreen = () => {
       if (formData.email !== user.email) {
         formDataToSend.append('email', formData.email);
       }
-      if (formData.password) {
-        formDataToSend.append('password', formData.password);
-      }
       if (formData.avatar) {
         formDataToSend.append('avatar', formData.avatar);
       }
 
+      // 🔍 DEBUG: Afficher toutes les données envoyées
+      console.log('=== DONNÉES ENVOYÉES AU BACKEND ===');
+      for (let pair of formDataToSend.entries()) {
+        console.log(pair[0] + ': ' + pair[1]);
+      }
+      console.log('====================================');
+
+      // Vérifier s'il y a des modifications
       if (Array.from(formDataToSend.entries()).length <= 1) {
         Swal.fire({
           icon: "info",
@@ -378,6 +434,7 @@ const ProfilScreen = () => {
         setShowModal(false);
         setFormData(prev => ({
           ...prev,
+          current_password: "",
           password: "",
           password_confirmation: "",
           avatar: null
@@ -387,11 +444,57 @@ const ProfilScreen = () => {
       console.error("Erreur modification profil:", error);
       
       if (error.response?.status === 422) {
-        setErrors(error.response.data.errors || {});
+        // 🔹 GÉRER L'ERREUR "ANCIEN MOT DE PASSE INCORRECT"
+        const serverErrors = error.response.data.errors || {};
+        
+        console.log('Erreurs serveur:', serverErrors); // 🔍 DEBUG
+        
+        if (serverErrors.current_password) {
+          setErrors(prev => ({
+            ...prev,
+            current_password: serverErrors.current_password[0]
+          }));
+        }
+        
+        if (serverErrors.password) {
+          setErrors(prev => ({
+            ...prev,
+            password: serverErrors.password[0]
+          }));
+        }
+        
+        if (serverErrors.password_confirmation) {
+          setErrors(prev => ({
+            ...prev,
+            password_confirmation: serverErrors.password_confirmation[0]
+          }));
+        }
+        
+        // Si c'est une erreur de confirmation
+        if (serverErrors.password && serverErrors.password[0].includes('confirmation')) {
+          Swal.fire({
+            icon: "error",
+            title: "Erreur de validation",
+            text: "Les mots de passe ne correspondent pas",
+            confirmButtonColor: "#3085d6"
+          });
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Erreur de validation",
+            text: serverErrors.current_password?.[0] || "Veuillez corriger les erreurs",
+            confirmButtonColor: "#3085d6"
+          });
+        }
+      } else if (error.response?.status === 401) {
+        setErrors(prev => ({
+          ...prev,
+          current_password: "L'ancien mot de passe est incorrect"
+        }));
         Swal.fire({
           icon: "error",
-          title: "Erreur de validation",
-          text: "Veuillez corriger les erreurs dans le formulaire",
+          title: "Mot de passe incorrect",
+          text: "L'ancien mot de passe fourni est incorrect",
           confirmButtonColor: "#3085d6"
         });
       } else if (error.response?.status === 404) {
@@ -509,6 +612,7 @@ const ProfilScreen = () => {
         nom: user.nom || "",
         prenom: user.prenom || "",
         email: user.email || "",
+        current_password: "",
         password: "",
         password_confirmation: "",
         avatar: null
@@ -587,7 +691,7 @@ const ProfilScreen = () => {
         <div className="content-header">
           <div className="container-fluid">
             
-            {/* 🔹 HEADER DU PROFIL */}
+            {/* HEADER DU PROFIL */}
             <div className="profile-header mb-4">
               <div className="row align-items-center">
                 <div className="col-lg-8">
@@ -626,20 +730,19 @@ const ProfilScreen = () => {
               </div>
             </div>
 
-            {/* 🔹 CARTE DE PROFIL PRINCIPALE - MODIFICATION DIRECTE DE L'IMAGE */}
+            {/* CARTE DE PROFIL PRINCIPALE */}
             <div className="row">
               <div className="col-lg-4 mb-4">
                 <div className="profile-card card border-0 shadow-sm">
                   <div className="card-body text-center p-4">
                     
-                    {/* 🔹 AVATAR AVEC UPLOAD DIRECT AU CLIC - COMME WHATSAPP */}
+                    {/* AVATAR AVEC UPLOAD DIRECT AU CLIC */}
                     <div className="profile-avatar-wrapper mb-4">
                       <div 
                         className="avatar-upload-container"
                         onClick={() => document.getElementById('avatar-direct-upload').click()}
                         style={{ cursor: 'pointer' }}
                       >
-                        {/* Aperçu temporaire ou image actuelle */}
                         {avatarPreview ? (
                           <img 
                             src={avatarPreview} 
@@ -649,8 +752,6 @@ const ProfilScreen = () => {
                           />
                         ) : user.avatar_url ? (
                           <img 
-                         
-                           // src={`http://127.0.0.1:8000/api/profil/avatar/17_1770914803.jpg?t=${Date.now()}`}
                             src={`${user.avatar_url}?t=${Date.now()}`}
                             alt={`${user.prenom} ${user.nom}`}
                             className="profile-avatar rounded-circle mx-auto"
@@ -674,13 +775,13 @@ const ProfilScreen = () => {
                           </div>
                         )}
 
-                        {/* 🔹 OVERLAY CAMERA AU SURVOL */}
+                        {/* OVERLAY CAMERA AU SURVOL */}
                         <div className="avatar-overlay">
                           <FaCamera size={24} />
                           <span>Changer la photo</span>
                         </div>
 
-                        {/* 🔹 LOADER PENDANT UPLOAD */}
+                        {/* LOADER PENDANT UPLOAD */}
                         {uploadingAvatar && (
                           <div className="avatar-uploading">
                             <FaSpinner className="fa-spin" size={32} />
@@ -688,7 +789,7 @@ const ProfilScreen = () => {
                         )}
                       </div>
 
-                      {/* 🔹 INPUT FILE CACHÉ */}
+                      {/* INPUT FILE CACHÉ */}
                       <input 
                         type="file"
                         id="avatar-direct-upload"
@@ -703,7 +804,7 @@ const ProfilScreen = () => {
                       </div>
                     </div>
                     
-                    {/* 🔹 NOM ET EMAIL */}
+                    {/* NOM ET EMAIL */}
                     <h3 className="font-weight-bold mb-1">
                       {user.prenom} {user.nom}
                     </h3>
@@ -712,7 +813,7 @@ const ProfilScreen = () => {
                       {user.email}
                     </p>
                     
-                    {/* 🔹 STATISTIQUES RAPIDES */}
+                    {/* STATISTIQUES RAPIDES */}
                     <div className="d-flex justify-content-center mb-4">
                       <div className="px-3 text-center">
                         <div className="h5 mb-0 font-weight-bold">{user.roles?.length || 0}</div>
@@ -741,7 +842,7 @@ const ProfilScreen = () => {
                   </div>
                 </div>
 
-                {/* 🔹 INFORMATIONS COMPLÉMENTAIRES */}
+                {/* INFORMATIONS COMPLÉMENTAIRES */}
                 <div className="card border-0 shadow-sm mt-4">
                   <div className="card-header bg-white border-0 py-3">
                     <h6 className="mb-0 font-weight-bold">
@@ -776,7 +877,7 @@ const ProfilScreen = () => {
                 </div>
               </div>
 
-              {/* 🔹 COLONNE PRINCIPALE - INFORMATIONS DÉTAILLÉES */}
+              {/* COLONNE PRINCIPALE - INFORMATIONS DÉTAILLÉES */}
               <div className="col-lg-8 mb-4">
                 <div className="card border-0 shadow-sm">
                   <div className="card-header bg-white border-0 py-3">
@@ -815,7 +916,7 @@ const ProfilScreen = () => {
                   </div>
                   
                   <div className="card-body p-4">
-                    {/* 🔹 ONGLET INFORMATIONS */}
+                    {/* ONGLET INFORMATIONS */}
                     {activeTab === "info" && (
                       <div className="profile-info-tab">
                         <h6 className="font-weight-bold mb-4 pb-2 border-bottom">
@@ -873,7 +974,7 @@ const ProfilScreen = () => {
                       </div>
                     )}
 
-                    {/* 🔹 ONGLET DIRECTIONS */}
+                    {/* ONGLET DIRECTIONS */}
                     {activeTab === "departements" && (
                       <div className="profile-departements-tab">
                         <div className="d-flex justify-content-between align-items-center mb-4">
@@ -925,7 +1026,7 @@ const ProfilScreen = () => {
                       </div>
                     )}
 
-                    {/* 🔹 ONGLET RÔLES */}
+                    {/* ONGLET RÔLES */}
                     {activeTab === "roles" && (
                       <div className="profile-roles-tab">
                         <div className="d-flex justify-content-between align-items-center mb-4">
@@ -987,7 +1088,7 @@ const ProfilScreen = () => {
         </div>
       </div>
 
-      {/* 🔹 MODAL DE MODIFICATION DU PROFIL - SANS AVATAR */}
+      {/* MODAL DE MODIFICATION DU PROFIL - AVEC ANCIEN MOT DE PASSE OBLIGATOIRE */}
       {showModal && (
         <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-dialog modal-lg" onClick={(e) => e.stopPropagation()}>
@@ -1008,14 +1109,14 @@ const ProfilScreen = () => {
               
               <form onSubmit={handleSubmit}>
                 <div className="modal-body p-4" style={{ maxHeight: 'calc(80vh - 130px)', overflowY: 'auto' }}>
-                  {/* 🔹 SECTION INFORMATIONS PERSONNELLES - SANS AVATAR */}
+                  {/* SECTION INFORMATIONS PERSONNELLES */}
                   <h6 className="font-weight-bold mb-3 pb-2 border-bottom">
                     <FaUserCircle className="mr-2 text-primary" />
                     Informations personnelles
                   </h6>
                   
                   <div className="row">
-                    {/* 🔹 NOM */}
+                    {/* NOM */}
                     <div className="col-md-6 mb-3">
                       <label className="form-label font-weight-medium">
                         Nom <span className="text-danger">*</span>
@@ -1031,7 +1132,7 @@ const ProfilScreen = () => {
                       <FieldError error={errors.nom} />
                     </div>
 
-                    {/* 🔹 PRÉNOM */}
+                    {/* PRÉNOM */}
                     <div className="col-md-6 mb-3">
                       <label className="form-label font-weight-medium">
                         Prénom <span className="text-danger">*</span>
@@ -1047,7 +1148,7 @@ const ProfilScreen = () => {
                       <FieldError error={errors.prenom} />
                     </div>
 
-                    {/* 🔹 EMAIL */}
+                    {/* EMAIL */}
                     <div className="col-md-12 mb-3">
                       <label className="form-label font-weight-medium">
                         Email <span className="text-danger">*</span>
@@ -1071,17 +1172,47 @@ const ProfilScreen = () => {
                     </div>
                   </div>
 
-                  {/* 🔹 SECTION MOT DE PASSE */}
+                  {/* SECTION MOT DE PASSE - AVEC ANCIEN MOT DE PASSE OBLIGATOIRE */}
                   <h6 className="font-weight-bold mb-3 pb-2 border-bottom mt-4">
                     <FaKey className="mr-2 text-primary" />
                     Changer le mot de passe
                   </h6>
                   <p className="text-muted small mb-3">
-                    Laissez vide si vous ne souhaitez pas modifier le mot de passe
+                    <FaExclamationCircle className="text-warning mr-1" />
+                    Pour changer votre mot de passe, vous devez d'abord entrer votre ancien mot de passe.
                   </p>
                   
                   <div className="row">
-                    {/* 🔹 NOUVEAU MOT DE PASSE */}
+                    {/* ANCIEN MOT DE PASSE - OBLIGATOIRE SI NOUVEAU MOT DE PASSE FOURNI */}
+                    <div className="col-md-12 mb-3">
+                      <label className="form-label font-weight-medium">
+                        Ancien mot de passe <span className="text-danger">*</span>
+                      </label>
+                      <div className="input-group">
+                        <div className="input-group-prepend">
+                          <span className="input-group-text">
+                            <FaLockOpen />
+                          </span>
+                        </div>
+                        <input
+                          type="password"
+                          name="current_password"
+                          className={`form-control ${errors.current_password ? 'is-invalid' : ''}`}
+                          value={formData.current_password}
+                          onChange={handleInputChange}
+                          placeholder="Entrez votre ancien mot de passe"
+                        />
+                      </div>
+                      <FieldError error={errors.current_password} />
+                      {!formData.current_password && formData.password && (
+                        <small className="text-danger d-block mt-1">
+                          <FaExclamationCircle className="mr-1" size={10} />
+                          L'ancien mot de passe est requis pour changer le mot de passe
+                        </small>
+                      )}
+                    </div>
+
+                    {/* NOUVEAU MOT DE PASSE */}
                     <div className="col-md-6 mb-3">
                       <label className="form-label font-weight-medium">
                         Nouveau mot de passe
@@ -1104,7 +1235,7 @@ const ProfilScreen = () => {
                       <FieldError error={errors.password} />
                     </div>
 
-                    {/* 🔹 CONFIRMATION MOT DE PASSE */}
+                    {/* CONFIRMATION MOT DE PASSE */}
                     <div className="col-md-6 mb-3">
                       <label className="form-label font-weight-medium">
                         Confirmer le mot de passe
@@ -1128,7 +1259,7 @@ const ProfilScreen = () => {
                     </div>
                   </div>
 
-                  {/* 🔹 ERREURS GÉNÉRALES */}
+                  {/* ERREURS GÉNÉRALES */}
                   {errors.general && (
                     <div className="alert alert-danger mt-3">
                       <FaExclamationCircle className="mr-2" />
@@ -1327,7 +1458,7 @@ const ProfilScreen = () => {
         .text-purple { color: #6f42c1; }
         .border-purple { border-color: #6f42c1 !important; }
 
-        /* 🔹 STYLES DU MODAL */
+        /* STYLES DU MODAL */
         .modal-overlay {
           position: fixed;
           top: 0;

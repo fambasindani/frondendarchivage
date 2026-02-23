@@ -1,8 +1,12 @@
+import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
+
 // utils/getTokenOrRedirect.js
 const GetTokenOrRedirect = () => {
+    const history = useHistory();
+
   const token = localStorage.getItem("token");
   if (!token) {
-    window.location.href = "/archive/";
+    history("/archive/") ;
     return null;
   }
   return token;

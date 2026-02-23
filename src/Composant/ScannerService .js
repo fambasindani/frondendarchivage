@@ -1,8 +1,10 @@
 // src/services/scannerService.js
+import { API_BASE_URL } from "../config";
 
 class ScannerService {
     constructor() {
         this.baseUrl = 'http://localhost:8081';
+       //  this.baseUrl = API_BASE_URL;
         this.isConnected = false;
     }
 
@@ -10,6 +12,7 @@ class ScannerService {
     async checkConnection() {
         try {
             const response = await fetch(`${this.baseUrl}/api/ping`, {
+             // const response = await fetch(`${this.baseUrl}/ping`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json'
@@ -39,7 +42,7 @@ class ScannerService {
     }
 
     // Définir les informations du document
-    async setDocumentInfo(documentId, classeurId, token) {
+    async setDocumentInfo(documentId, classeurId, token,  nomFichier) {
         try {
             const response = await fetch(`${this.baseUrl}/api/setinfo`, {
                 method: 'POST',
@@ -50,7 +53,8 @@ class ScannerService {
                 body: JSON.stringify({
                     documentId: parseInt(documentId),
                     classeurId: parseInt(classeurId),
-                    token: token
+                    token: token,
+                    nom_fichier: nomFichier 
                 })
             });
             

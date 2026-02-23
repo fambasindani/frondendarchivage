@@ -26,6 +26,7 @@ import {
 } from 'react-icons/fa';
 import LoadingSpinner from "../Loading/LoadingSpinner";
 import { Link } from "react-router-dom/cjs/react-router-dom.min";
+import FileUploadModal from "../Modals/FileUploadModal"; // 👈 Import ajouté
 
 const DocumentScreen = () => {
   const token = GetTokenOrRedirect();
@@ -44,7 +45,6 @@ const DocumentScreen = () => {
     setUserDirectionIds(ids);
     console.log('🏢 IDs des départements utilisateur (login):', ids);
 
-    // Si l'utilisateur n'a aucune direction, afficher un message
     if (ids.length === 0) {
       Swal.fire({
         icon: 'info',
@@ -55,7 +55,6 @@ const DocumentScreen = () => {
       });
     }
 
-    // Marquer comme chargé
     setTimeout(() => {
       setIsLoadingUserData(false);
     }, 500);
@@ -74,6 +73,10 @@ const DocumentScreen = () => {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [filteredBy, setFilteredBy] = useState(null);
+
+  // États pour le modal d'upload
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [selectedDocumentForUpload, setSelectedDocumentForUpload] = useState(null);
 
   const [statsCards, setStatsCards] = useState([
     {
@@ -164,9 +167,14 @@ const DocumentScreen = () => {
     });
   };
 
+  // Fonction d'ouverture du modal d'upload
+  const handleUploadClick = (document) => {
+    setSelectedDocumentForUpload(document);
+    setShowUploadModal(true);
+  };
+
   // 🔥 useEffect avec dépendances
   useEffect(() => {
-    // Attendre que les données utilisateur soient chargées
     if (token && !isLoadingUserData) {
       fetchDocuments();
     }
@@ -176,7 +184,7 @@ const DocumentScreen = () => {
     if (!token) return;
 
     setLoading(true);
-    setDocuments([]); // Vider les anciens documents
+    setDocuments([]);
 
     try {
       let params = {
@@ -184,13 +192,11 @@ const DocumentScreen = () => {
         per_page: 10
       };
 
-      // 🔥 N'envoyer les direction_ids QUE s'ils existent
       if (userDirectionIds.length > 0) {
         params.direction_ids = userDirectionIds.join(',');
         console.log('📤 Envoi des direction_ids:', params.direction_ids);
       } else {
         console.log('📤 Aucune direction - ne rien afficher');
-        // Si pas de direction, afficher directement un tableau vide
         setDocuments([]);
         setFilteredBy('none');
         setPagination({
@@ -206,7 +212,7 @@ const DocumentScreen = () => {
       let res;
       if (modeRecherche && search.trim() !== "") {
         res = await axios.post(
-          `${API_BASE_URL}/declarations/search`, // À adapter selon votre besoin
+          `${API_BASE_URL}/declarations/search`,
           {
             search,
             page: pagination.current_page,
@@ -223,7 +229,6 @@ const DocumentScreen = () => {
 
       console.log('📥 Réponse brute:', res.data);
 
-      // Adapter à la structure de la réponse
       const responseData = res.data.data || res.data;
       const documentsList = responseData.data || responseData || [];
       const filteredByValue = res.data.filtered_by || 'all';
@@ -241,7 +246,6 @@ const DocumentScreen = () => {
         per_page: responseData.per_page || 10
       });
 
-      // Mettre à jour les stats
       const total = documentsList.length;
       const actifs = documentsList.filter(d => d.statut === true || d.statut === 1).length;
 
@@ -394,7 +398,7 @@ const DocumentScreen = () => {
 
   const ActionDropdown = ({ document }) => {
     const [isOpen, setIsOpen] = useState(false);
-
+        
     const actions = [
       {
         label: "Voir",
@@ -415,12 +419,10 @@ const DocumentScreen = () => {
         onClick: () => handleDuplicateDocument(document)
       },
       {
-        label: "Télécharger",
+        label: "Gérer fichiers", // Renommé pour éviter confusion avec téléchargement direct
         icon: <FaDownload />,
         color: "secondary",
-        onClick: () => {
-          window.open(`${API_BASE_URL}/declarations/${document.id}/download`, '_blank');
-        }
+        onClick: () => handleUploadClick(document) // Ouvre le modal d'upload
       },
       {
         label: "Partager",
@@ -599,7 +601,7 @@ const DocumentScreen = () => {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                        disabled={userDirectionIds.length === 0} // Désactiver si pas de direction
+                        disabled={userDirectionIds.length === 0}
                       />
                       <div className="input-group-append">
                         <button
@@ -738,6 +740,17 @@ const DocumentScreen = () => {
           </div>
         </section>
       </div>
+
+      {/* Modal d'upload */}
+      {showUploadModal && selectedDocumentForUpload && (
+        <FileUploadModal
+          documentId={selectedDocumentForUpload.id}
+          id_classeur={selectedDocumentForUpload.id_classeur || selectedDocumentForUpload.classeur?.id}
+          onClose={() => setShowUploadModal(false)}
+          token={token}
+          nom_fichier={selectedDocumentForUpload.intitule}
+        />
+      )}
     </div>
   );
 };

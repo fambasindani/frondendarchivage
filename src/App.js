@@ -67,9 +67,9 @@ function AppContent() {
       <Switch>
         {/* Accueil par défaut → Login */}
         <Route path="/scan" component={ScanViewers} />
-        <Route exact path="/login" component={LoginScreen} />
+        <Route exact path="/" component={LoginScreen} />
 
-        <Route exact path="/" component={HomeScreen} />
+        {/* <Route exact path="/" component={HomeScreen} /> */}
 
         {/* Routes de ton application existante */}
         <Route path="/direction" component={DirectionScreen} />
