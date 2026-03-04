@@ -6,6 +6,7 @@ import Menus from "../Composant/Menus";
 import { API_BASE_URL } from "../config";
 import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
+import AdvancedSearchNoteModal from "../Modals/AdvancedSearchNoteModal";
 import {
   FaFolder,
   FaFileAlt,
@@ -41,7 +42,8 @@ import {
   FaRegCalendarAlt,
   FaRegClock,
   FaChevronUp,
-  FaChevronDown
+  FaChevronDown,
+  FaMicroscope
 } from "react-icons/fa";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -56,6 +58,9 @@ const Tableaudebordnote = () => {
   const nom = utilisateur?.nom || "";
   const prenom = utilisateur?.prenom || "";
   const role = utilisateur?.role || "";
+
+  // 🔹 État pour le modal de recherche avancée
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
 
   // 🔹 États principaux
   const [loading, setLoading] = useState(true);
@@ -648,6 +653,14 @@ const Tableaudebordnote = () => {
                     <FaSync className={`mr-2 ${refreshing ? "fa-spin" : ""}`} />
                     Actualiser
                   </button>
+                  <button
+                    className="btn btn-success border shadow-sm px-4 ml-2"
+                    onClick={() => setShowAdvancedSearch(true)}
+                    disabled={loading}
+                  >
+                    <FaMicroscope className="mr-2" />
+                    Recherche OCR
+                  </button>
                 </div>
               </div>
             </div>
@@ -950,6 +963,13 @@ const Tableaudebordnote = () => {
           </div>
         </div>
       </div>
+
+      {/* MODAL DE RECHERCHE AVANCÉE OCR */}
+      <AdvancedSearchNoteModal
+        isOpen={showAdvancedSearch}
+        onClose={() => setShowAdvancedSearch(false)}
+        token={token}
+      />
 
       <style jsx>{`
         .dashboard-notes {

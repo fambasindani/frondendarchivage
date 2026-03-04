@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useHistory } from "react-router-dom";
+import { useHistory, Link } from "react-router-dom";
 import {
   FaUser,
   FaSignOutAlt,
@@ -11,7 +11,6 @@ import {
   FaBell,
   FaEnvelope
 } from "react-icons/fa";
-import { Link } from "react-router-dom/cjs/react-router-dom.min";
 
 const Head = () => {
   const utilisateur = JSON.parse(localStorage.getItem("utilisateur"));
@@ -24,19 +23,9 @@ const Head = () => {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const logout = () => {
-     localStorage.clear();
-    localStorage.removeItem("token");
-    localStorage.removeItem("utilisateur");
+    localStorage.clear();
     history.push("/");
   };
-
-
-    // useEffect(() => {
-      
-    // alert(utilisateur)
-      
-    // }, []); // Dépendances vides = s'exécute une seule fois au montage
-  
 
   return (
     <nav className="main-header navbar navbar-expand navbar-dark navbar-primary bg-gradient-primary shadow-sm">
@@ -62,7 +51,7 @@ const Head = () => {
         </li>
       </ul>
 
-      {/* Notifications et Messages (optionnel) */}
+      {/* Notifications et Messages */}
       <ul className="navbar-nav ml-auto d-none d-md-flex">
         <li className="nav-item dropdown mx-2">
           <a className="nav-link position-relative" href="#" onClick={(e) => e.preventDefault()}>
@@ -82,7 +71,7 @@ const Head = () => {
         </li>
       </ul>
 
-      {/* Liens utilisateur à droite */}
+      {/* Menu utilisateur */}
       <ul className="navbar-nav ml-3">
         <li className="nav-item dropdown">
           <button
@@ -118,43 +107,23 @@ const Head = () => {
 
               <div className="dropdown-divider m-0"></div>
 
-              <a className="dropdown-item d-flex align-items-center py-3" onClick={(e) => e.preventDefault()}>
+              {/* Lien Mon Profil - corrigé avec Link direct */}
+              <Link to="/profil" className="dropdown-item d-flex align-items-center py-3">
                 <FaUserCircle className="mr-3 text-primary" />
                 <div>
-                  <div className="font-weight-bold"> 
-                    <Link to="/profil" style={{ color: "inherit", textDecoration: "none" }}>
-                    Mon Profil
-                  </Link>
-                  </div>
+                  <div className="font-weight-bold">Mon Profil</div>
                   <small className="text-muted">Gérer vos informations personnelles</small>
                 </div>
-              </a>
+              </Link>
 
-              <a href="#" className="dropdown-item d-flex align-items-center py-3" onClick={(e) => e.preventDefault()}>
-                <FaKey className="mr-3 text-warning" />
-                <div>
-                  <div className="font-weight-bold">Changer mot de passe</div>
-                  <small className="text-muted">Mettre à jour votre mot de passe</small>
-                </div>
-              </a>
-
-              <a href="#" className="dropdown-item d-flex align-items-center py-3" onClick={(e) => e.preventDefault()}>
-                <FaCog className="mr-3 text-info" />
-                <div>
-                  <div className="font-weight-bold">Paramètres</div>
-                  <small className="text-muted">Préférences du compte</small>
-                </div>
-              </a>
-
-              <div className="dropdown-divider"></div>
-
-              <button className="dropdown-item d-flex align-items-center py-3 text-danger" onClick={logout}>
+              {/* Déconnexion - corrigé sans preventDefault */}
+              <a className="dropdown-item d-flex align-items-center py-3 text-danger" onClick={logout}>
                 <FaSignOutAlt className="mr-3" />
                 <div>
-                  <div className="font-weight-bold" onClick={logout}>Déconnecter</div>
+                  <div className="font-weight-bold">Déconnecter</div>
                   <small className="text-muted">Quitter la session</small>
                 </div>
-              </button>
+              </a>
             </div>
           )}
         </li>
@@ -211,6 +180,7 @@ const Head = () => {
           border-radius: 5px;
           margin: 2px 10px;
           width: auto;
+          cursor: pointer; /* ✅ Curseur main au survol */
         }
         
         .dropdown-item:hover {

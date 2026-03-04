@@ -5,7 +5,8 @@ import Head from "../Composant/Head";
 import Menus from "../Composant/Menus";
 import { API_BASE_URL } from "../config";
 import GetTokenOrRedirect from "../Composant/getTokenOrRedirect";
-import { useHistory } from "react-router-dom"; // CORRECTION ICI
+import { useHistory } from "react-router-dom";
+import AdvancedSearchModal from "../Modals/AdvancedSearchModal";
 import {
   FaFolder,
   FaFileAlt,
@@ -14,7 +15,6 @@ import {
   FaArrowRight,
   FaBuilding,
   FaUser,
-  FaChartPie,
   FaCalendarAlt,
   FaEye,
   FaSpinner,
@@ -24,14 +24,12 @@ import {
   FaFileImage,
   FaClock,
   FaCheckCircle,
-  FaArchive,
-  FaChartLine,
   FaLayerGroup,
-  FaTags,
   FaFilter,
   FaTimes,
   FaChevronUp,
-  FaChevronDown
+  FaChevronDown,
+  FaMicroscope
 } from "react-icons/fa";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -41,20 +39,26 @@ const DashboardScreen = () => {
   const history = useHistory();
   const token = GetTokenOrRedirect();
 
-  // 🔹 État utilisateur
+  // 🔹 Récupérer l'utilisateur depuis localStorage
   const utilisateur = JSON.parse(localStorage.getItem("utilisateur")) || {};
   const nom = utilisateur?.nom || "";
   const prenom = utilisateur?.prenom || "";
   const role = utilisateur?.role || "";
-  const id_direction = utilisateur?.id_direction || "";
 
-
+  // 🔹 Récupérer tous les départements de l'utilisateur
+  const departements = JSON.parse(localStorage.getItem("departements")) || [];
+  // Direction active sélectionnée par l'utilisateur (par défaut la première)
+  const [selectedUserDirection, setSelectedUserDirection] = useState(
+    departements.length > 0 ? departements[0].id : ""
+  );
+  // Informations de la direction active
+  const userDirection = departements.find(d => d.id === parseInt(selectedUserDirection)) || null;
 
   // 🔹 États principaux
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [classificateurs, setClassificateurs] = useState([]);
-  const [directions, setDirections] = useState([]);
+  const [directions, setDirections] = useState([]); // toutes les directions de l'application
   const [stats, setStats] = useState({
     total_documents: 0,
     total_classificateurs: 0,
@@ -68,9 +72,9 @@ const DashboardScreen = () => {
     top_directions: []
   });
 
-  // 🔹 Filtres
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDirection, setSelectedDirection] = useState("");
+  const [selectedDirection, setSelectedDirection] = useState(""); // filtre
   const [selectedPeriode, setSelectedPeriode] = useState("all");
   const [selectedStatut, setSelectedStatut] = useState("tous");
   const [showFilters, setShowFilters] = useState(true);
@@ -84,32 +88,29 @@ const DashboardScreen = () => {
 
   const itemsPerPage = 12;
 
-  // 🔹 Chargement initial
+  // 🔹 Chargement initial (quand token ou page change)
   useEffect(() => {
-    if (token) {
-      fetchAllData();
-    }
-  }, [token, currentPage]);
+    fetchAllData(currentPage);
+  }, [currentPage, selectedUserDirection]); // Recharger quand la direction active change
 
-  // 🔹 Surveiller les changements de selectedDirection (DEBUG)
   useEffect(() => {
     console.log("🔄 selectedDirection a changé:", selectedDirection);
   }, [selectedDirection]);
 
-  // 🔹 Obtenir les en-têtes d'authentification
   const getAuthHeaders = () => ({
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
     Accept: "application/json"
   });
 
-  // 🔹 Charger TOUTES les données en parallèle
-  const fetchAllData = async () => {
+  // 🔹 Charge toutes les données
+  const fetchAllData = async (page = currentPage) => {
     setLoading(true);
+    setRefreshing(true);
     try {
       await Promise.all([
         fetchStatistics(),
-        fetchClassifiers(),
+        fetchClassifiers(page),
         fetchDirections()
       ]);
     } catch (error) {
@@ -121,14 +122,12 @@ const DashboardScreen = () => {
     }
   };
 
-  // 🔹 Statistiques
   const fetchStatistics = async () => {
     try {
       const response = await axios.get(
         `${API_BASE_URL}/dashboard/statistics`,
         { headers: getAuthHeaders() }
       );
-
       if (response.data.success) {
         setStats(response.data.data);
       }
@@ -137,11 +136,10 @@ const DashboardScreen = () => {
     }
   };
 
-  // 🔹 Classificateurs avec pagination
-  const fetchClassifiers = async () => {
+  const fetchClassifiers = async (page = currentPage) => {
     try {
       const params = {
-        page: currentPage,
+        page: page,
         per_page: itemsPerPage
       };
 
@@ -153,31 +151,30 @@ const DashboardScreen = () => {
         `${API_BASE_URL}/dashboard/classifiers`,
         { headers: getAuthHeaders(), params }
       );
-      
 
       if (response.data.success) {
-        setClassificateurs(response.data.data.data || []);
+        const data = response.data.data;
+        setClassificateurs(data.data || []);
         setPagination({
-          current_page: response.data.data.current_page || 1,
-          last_page: response.data.data.last_page || 1,
-          per_page: response.data.data.per_page || 12,
-          total: response.data.data.total || 0
+          current_page: data.current_page || 1,
+          last_page: data.last_page || 1,
+          per_page: data.per_page || 12,
+          total: data.total || 0
         });
+        return data.data || [];
       }
     } catch (error) {
       console.error("Erreur classificateurs:", error);
     }
-  
+    return [];
   };
 
-  // 🔹 Directions
   const fetchDirections = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/departements`, {
         headers: getAuthHeaders()
       });
       setDirections(response.data.data.data);
-      console.log("📋 Directions chargées:", response.data.data.data);
     } catch (error) {
       console.error("Erreur directions:", error);
     }
@@ -195,35 +192,26 @@ const DashboardScreen = () => {
       return;
     }
 
+    setCurrentPage(1);
     setLoading(true);
-    try {
-      const response = await axios.post(
-        `${API_BASE_URL}/dashboard/search`,
-        {
-          nom_classeur: searchTerm,
-          id_direction: selectedDirection,
-          periode: selectedPeriode,
-          statut: selectedStatut
-        },
-        { headers: getAuthHeaders() }
-      );
+    const results = await fetchClassifiers(1);
+    setLoading(false);
 
-      if (response.data.success) {
-        setClassificateurs(response.data.data.classificateurs || []);
-        setPagination(response.data.data.pagination);
-
-        Swal.fire({
-          icon: "success",
-          title: `${response.data.data.classificateurs.length} résultat(s) trouvé(s)`,
-          showConfirmButton: false,
-          timer: 1500
-        });
-      }
-    } catch (error) {
-      console.error("Erreur recherche:", error);
-      Swal.fire("Erreur", "Impossible de charger les résultats", "error");
-    } finally {
-      setLoading(false);
+    if (results.length > 0) {
+      Swal.fire({
+        icon: "success",
+        title: `${results.length} résultat(s) trouvé(s)`,
+        showConfirmButton: false,
+        timer: 1500
+      });
+    } else {
+      Swal.fire({
+        icon: "info",
+        title: "Aucun résultat",
+        text: "Aucun classificateur ne correspond à vos critères.",
+        timer: 1500,
+        showConfirmButton: false
+      });
     }
   };
 
@@ -234,70 +222,45 @@ const DashboardScreen = () => {
     setSelectedPeriode("all");
     setSelectedStatut("tous");
     setCurrentPage(1);
-    fetchAllData();
+    fetchAllData(1);
   };
 
-const handleListeDocument = (classifier) => {
-    // 🔍 Vérifier la valeur de selectedDirection
+  const handleListeDocument = (classifier) => {
     console.log("🔍 DONNÉES AVANT ENVOI:", {
-        classifier: classifier,
-        selectedDirection: selectedDirection,
-        selectedPeriode: selectedPeriode,
-        searchTerm: searchTerm
+      classifier: classifier,
+      selectedDirection: selectedDirection,
+      selectedUserDirection: selectedUserDirection,
+      searchTerm: searchTerm
     });
 
-    // Initialiser les variables
-    let directionAEnvoyer = selectedDirection;
+    let directionAEnvoyer = selectedDirection; // si un filtre direction est actif
     let nomDirectionAEnvoyer = "";
     let directionInfo = null;
 
     if (!directionAEnvoyer) {
-        // Cas 1: Utiliser les données du classificateur
-        if (classifier.directions && classifier.directions.length > 0) {
-            directionInfo = classifier.directions[0];
-            directionAEnvoyer = directionInfo.id;
-            nomDirectionAEnvoyer = directionInfo.nom || directionInfo.sigle || "";
-            console.log("📌 Direction trouvée dans directions[]:", directionInfo);
-        }
-        // Cas 2: Utiliser les déclarations
-        else if (classifier.declarations && classifier.declarations.length > 0) {
-            const firstDecl = classifier.declarations[0];
-            directionAEnvoyer = firstDecl.id_direction;
-            nomDirectionAEnvoyer = firstDecl.nom_direction || 
-                                   firstDecl.departement?.nom || 
-                                   firstDecl.direction?.nom || "";
-            directionInfo = firstDecl.departement || firstDecl.direction;
-            console.log("📌 Direction trouvée dans declarations[]:", firstDecl);
-        }
-        // Cas 3: Utiliser la direction de l'utilisateur
-        else {
-            directionAEnvoyer = id_direction;
-            directionInfo = directions.find(d => d.id === parseInt(id_direction));
-            nomDirectionAEnvoyer = directionInfo?.nom || directionInfo?.sigle || "";
-            console.log("📌 Direction utilisateur:", directionInfo);
-        }
+      // Aucun filtre : on utilise la direction active sélectionnée
+      directionAEnvoyer = selectedUserDirection;
+      directionInfo = userDirection;
+      nomDirectionAEnvoyer = directionInfo ? `${directionInfo.sigle || ""} ${directionInfo.nom}`.trim() : "";
     } else {
-        // Cas 4: Direction sélectionnée manuellement
-        directionInfo = directions.find(d => d.id === parseInt(selectedDirection));
-        nomDirectionAEnvoyer = directionInfo?.nom || directionInfo?.sigle || "";
+      // Sinon on prend les infos de la direction sélectionnée dans le filtre
+      directionInfo = directions.find(d => d.id === parseInt(selectedDirection));
+      nomDirectionAEnvoyer = directionInfo ? `${directionInfo.sigle || ""} ${directionInfo.nom}`.trim() : "";
     }
 
-    // ALERTE pour voir la valeur envoyée
-   // alert(`Direction envoyée: ${directionAEnvoyer} - ${nomDirectionAEnvoyer}`);
-
-    // ✅ Envoi des données enrichies
     history.push({
-        pathname: `/listedocument/${classifier.id}`,
-        state: {
-            classifier,
-            direction: directionAEnvoyer,
-            nomDirection: nomDirectionAEnvoyer,
-            directionInfo: directionInfo,  // ← Toutes les infos de la direction
-            periode: selectedPeriode,
-            searchTerm
-        }
+      pathname: `/listedocument/${classifier.id}`,
+      state: {
+        classifier,
+        direction: directionAEnvoyer,
+        nomDirection: nomDirectionAEnvoyer,
+        directionInfo: directionInfo,
+        periode: selectedPeriode,
+        searchTerm
+      }
     });
-};
+  };
+
   // 🔹 Obtenir l'icône du fichier
   const getFileIcon = (nom) => {
     const type = nom?.toLowerCase() || "";
@@ -329,10 +292,7 @@ const handleListeDocument = (classifier) => {
   const timeAgo = (dateString) => {
     if (!dateString) return "";
     try {
-      return formatDistanceToNow(new Date(dateString), {
-        addSuffix: true,
-        locale: fr
-      });
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: fr });
     } catch {
       return "";
     }
@@ -409,6 +369,11 @@ const handleListeDocument = (classifier) => {
     );
   };
 
+  // 🔹 Afficher le nom de la direction active
+  const getUserDirectionName = () => {
+    return userDirection ? `${userDirection.sigle || ""} ${userDirection.nom}`.trim() : "Direction";
+  };
+
   return (
     <div className="dashboard-documents">
       <Menus />
@@ -417,10 +382,7 @@ const handleListeDocument = (classifier) => {
       <div className="content-wrapper">
         <div className="content-header">
           <div className="container-fluid">
-
-         
-
-            {/* HEADER MODERNE */}
+            {/* HEADER MODERNE avec sélecteur de direction */}
             <div className="dashboard-header mb-4">
               <div className="row align-items-center">
                 <div className="col-lg-8">
@@ -429,24 +391,32 @@ const handleListeDocument = (classifier) => {
                       <FaLayerGroup className="text-primary" size={28} />
                     </div>
                     <div>
-                      <h1 className="h2 mb-1 font-weight-bold">
-                        Gestion Documentaire
-                      </h1>
+                      <h1 className="h2 mb-1 font-weight-bold">Gestion Documentaire</h1>
                       <div className="d-flex align-items-center flex-wrap text-muted">
                         <span className="d-flex align-items-center mr-3">
                           <FaUser className="mr-1" size={14} />
                           {prenom} {nom}
                         </span>
                         {role && (
-                          <span className="badge badge-light mr-3 px-3 py-1">
-                            {role}
-                          </span>
+                          <span className="badge badge-light mr-3 px-3 py-1">{role}</span>
                         )}
-                        {id_direction && (
-                          <span className="d-flex align-items-center">
+                        {/* Sélecteur de direction active */}
+                        {departements.length > 0 && (
+                          <div className="d-flex align-items-center ml-2">
                             <FaBuilding className="mr-1" size={14} />
-                            {directions.find(d => d.id === parseInt(id_direction))?.nom || "Direction"}
-                          </span>
+                            <select
+                              className="form-control form-control-sm border-0 bg-light"
+                              value={selectedUserDirection}
+                              onChange={(e) => setSelectedUserDirection(e.target.value)}
+                              style={{ width: 'auto', minWidth: '150px', cursor: 'pointer' }}
+                            >
+                              {departements.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.sigle} - {d.nom}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -461,6 +431,14 @@ const handleListeDocument = (classifier) => {
                     <FaSync className={`mr-2 ${refreshing ? "fa-spin" : ""}`} />
                     Actualiser
                   </button>
+                  <button
+                    className="btn btn-info border shadow-sm px-4 ml-2"
+                    onClick={() => setShowAdvancedSearch(true)}
+                    disabled={loading}
+                  >
+                    <FaMicroscope className="mr-2" />
+                    Recherche OCR
+                  </button>
                 </div>
               </div>
             </div>
@@ -474,8 +452,7 @@ const handleListeDocument = (classifier) => {
                       <p className="text-muted small mb-1">Total Documents</p>
                       <h2 className="mb-0 font-weight-bold">{stats.total_documents}</h2>
                       <small className="text-success">
-                        <FaCheckCircle className="mr-1" size={12} />
-                        {stats.documents_actifs} actifs
+                        <FaCheckCircle className="mr-1" size={12} /> {stats.documents_actifs} actifs
                       </small>
                     </div>
                     <div className="stat-icon bg-primary-soft rounded-circle p-3">
@@ -492,8 +469,7 @@ const handleListeDocument = (classifier) => {
                       <p className="text-muted small mb-1">Classificateurs</p>
                       <h2 className="mb-0 font-weight-bold">{stats.total_classificateurs}</h2>
                       <small className="text-info">
-                        <FaFolder className="mr-1" size={12} />
-                        {classificateurs.length} affichés
+                        <FaFolder className="mr-1" size={12} /> {classificateurs.length} affichés
                       </small>
                     </div>
                     <div className="stat-icon bg-info-soft rounded-circle p-3">
@@ -510,8 +486,7 @@ const handleListeDocument = (classifier) => {
                       <p className="text-muted small mb-1">Ce Mois</p>
                       <h2 className="mb-0 font-weight-bold">{stats.documents_mois}</h2>
                       <small className="text-warning">
-                        <FaCalendarAlt className="mr-1" size={12} />
-                        +{stats.documents_semaine} cette semaine
+                        <FaCalendarAlt className="mr-1" size={12} /> +{stats.documents_semaine} cette semaine
                       </small>
                     </div>
                     <div className="stat-icon bg-warning-soft rounded-circle p-3">
@@ -528,8 +503,7 @@ const handleListeDocument = (classifier) => {
                       <p className="text-muted small mb-1">Aujourd'hui</p>
                       <h2 className="mb-0 font-weight-bold">{stats.documents_aujourdhui}</h2>
                       <small className="text-success">
-                        <FaClock className="mr-1" size={12} />
-                        Nouveaux documents
+                        <FaClock className="mr-1" size={12} /> Nouveaux documents
                       </small>
                     </div>
                     <div className="stat-icon bg-success-soft rounded-circle p-3">
@@ -542,7 +516,7 @@ const handleListeDocument = (classifier) => {
 
             {/* FILTRES AVANCÉS */}
             <div className="filters-section bg-white rounded shadow-sm mb-4">
-              <div 
+              <div
                 className="filters-header p-3 d-flex align-items-center justify-content-between"
                 style={{ cursor: 'pointer', borderBottom: showFilters ? '1px solid #dee2e6' : 'none' }}
                 onClick={() => setShowFilters(!showFilters)}
@@ -576,8 +550,7 @@ const handleListeDocument = (classifier) => {
                   <div className="row">
                     <div className="col-md-3 mb-3">
                       <label className="small font-weight-bold text-muted mb-1">
-                        <FaSearch className="mr-1" />
-                        Mot-clé
+                        <FaSearch className="mr-1" /> Nom du classeur
                       </label>
                       <input
                         type="text"
@@ -591,8 +564,7 @@ const handleListeDocument = (classifier) => {
 
                     <div className="col-md-3 mb-3">
                       <label className="small font-weight-bold text-muted mb-1">
-                        <FaBuilding className="mr-1" />
-                        Direction
+                        <FaBuilding className="mr-1" /> Direction
                       </label>
                       <select
                         className="form-control"
@@ -619,8 +591,7 @@ const handleListeDocument = (classifier) => {
 
                     <div className="col-md-2 mb-3">
                       <label className="small font-weight-bold text-muted mb-1">
-                        <FaCalendarAlt className="mr-1" />
-                        Période
+                        <FaCalendarAlt className="mr-1" /> Période
                       </label>
                       <select
                         className="form-control"
@@ -638,8 +609,7 @@ const handleListeDocument = (classifier) => {
 
                     <div className="col-md-2 mb-3">
                       <label className="small font-weight-bold text-muted mb-1">
-                        <FaFileAlt className="mr-1" />
-                        Statut
+                        <FaFileAlt className="mr-1" /> Statut
                       </label>
                       <select
                         className="form-control"
@@ -673,12 +643,9 @@ const handleListeDocument = (classifier) => {
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <div className="d-flex align-items-center">
                   <h5 className="mb-0 font-weight-bold">
-                    <FaFolder className="mr-2 text-primary" />
-                    Classificateurs
+                    <FaFolder className="mr-2 text-primary" /> Classificateurs
                   </h5>
-                  <span className="badge badge-primary ml-3 px-3 py-2">
-                    {pagination.total} résultat(s)
-                  </span>
+                  <span className="badge badge-primary ml-3 px-3 py-2">{pagination.total} résultat(s)</span>
                 </div>
                 {!loading && pagination.total > 0 && (
                   <small className="text-muted">
@@ -699,8 +666,7 @@ const handleListeDocument = (classifier) => {
                     Aucun classificateur ne correspond à vos critères de recherche.
                   </p>
                   <button className="btn btn-primary" onClick={handleReset}>
-                    <FaSync className="mr-2" />
-                    Réinitialiser les filtres
+                    <FaSync className="mr-2" /> Réinitialiser les filtres
                   </button>
                 </div>
               ) : (
@@ -759,7 +725,6 @@ const handleListeDocument = (classifier) => {
                     ))}
                   </div>
 
-                  {/* Pagination */}
                   {!loading && pagination.last_page > 1 && (
                     <div className="d-flex justify-content-between align-items-center mt-4">
                       <div className="text-muted small">
@@ -776,19 +741,26 @@ const handleListeDocument = (classifier) => {
           </div>
         </div>
       </div>
-  
-  
+
+      {/* Passage de la direction active au modal */}
+      <AdvancedSearchModal
+        isOpen={showAdvancedSearch}
+        onClose={() => setShowAdvancedSearch(false)}
+        token={token}
+        selectedUserDirection={selectedUserDirection}
+        userDirection={userDirection}
+        allDirections={directions}
+      />
+
       <style jsx>{`
         .dashboard-documents {
           background: linear-gradient(135deg, #f5f7fa 0%, #f8f9fc 100%);
           min-height: 100vh;
         }
-        
         .content-wrapper {
           margin-left: 250px;
           padding-top: 20px;
         }
-        
         .dashboard-header {
           background: white;
           padding: 25px 30px;
@@ -796,7 +768,6 @@ const handleListeDocument = (classifier) => {
           box-shadow: 0 5px 20px rgba(0,0,0,0.02);
           border: 1px solid rgba(255,255,255,0.1);
         }
-        
         .header-icon-wrapper {
           width: 64px;
           height: 64px;
@@ -804,17 +775,15 @@ const handleListeDocument = (classifier) => {
           align-items: center;
           justify-content: center;
         }
-        
         .stat-card {
           transition: all 0.3s ease;
           border: 1px solid rgba(0,0,0,0.03);
+          border-radius: 12px;
         }
-        
         .stat-card:hover {
           transform: translateY(-3px);
           box-shadow: 0 10px 25px rgba(0,0,0,0.05) !important;
         }
-        
         .stat-icon {
           width: 56px;
           height: 56px;
@@ -822,33 +791,27 @@ const handleListeDocument = (classifier) => {
           align-items: center;
           justify-content: center;
         }
-        
         .filters-section {
           border-left: 4px solid #007bff;
           transition: all 0.3s ease;
         }
-        
         .filters-header {
           background: white;
           border-radius: 16px 16px 0 0;
         }
-        
         .filters-header:hover {
           background-color: #f8f9fa;
         }
-        
         .classifier-card {
           transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
           border-radius: 16px;
           overflow: hidden;
           cursor: pointer;
         }
-        
         .classifier-card:hover {
           transform: translateY(-8px);
           box-shadow: 0 20px 40px rgba(0,123,255,0.1) !important;
         }
-        
         .classifier-icon-wrapper {
           width: 56px;
           height: 56px;
@@ -858,16 +821,13 @@ const handleListeDocument = (classifier) => {
           font-size: 24px;
           transition: all 0.3s ease;
         }
-        
         .classifier-card:hover .classifier-icon-wrapper {
           transform: scale(1.1);
         }
-        
         .classifier-badge {
           font-size: 0.85rem;
           font-weight: 600;
         }
-        
         .classifier-title {
           font-size: 1rem;
           color: #2c3e50;
@@ -877,17 +837,14 @@ const handleListeDocument = (classifier) => {
           overflow: hidden;
           min-height: 2.8rem;
         }
-        
         .progress {
           background-color: #eef2f7;
           border-radius: 10px;
           overflow: hidden;
         }
-        
         .empty-state {
           border-radius: 16px;
         }
-        
         .empty-icon-wrapper {
           width: 120px;
           height: 120px;
@@ -895,7 +852,6 @@ const handleListeDocument = (classifier) => {
           align-items: center;
           justify-content: center;
         }
-        
         .bg-primary-soft { background: rgba(0, 123, 255, 0.1); }
         .bg-success-soft { background: rgba(40, 167, 69, 0.1); }
         .bg-info-soft { background: rgba(23, 162, 184, 0.1); }
@@ -903,26 +859,15 @@ const handleListeDocument = (classifier) => {
         .bg-purple { background: #6f42c1; }
         .bg-purple-soft { background: rgba(111, 66, 193, 0.1); }
         .text-purple { color: #6f42c1; }
-        
         .gap-2 { gap: 0.5rem; }
-        
         @media (max-width: 768px) {
-          .content-wrapper {
-            margin-left: 0;
-          }
-          
-          .dashboard-header {
-            padding: 20px;
-          }
-          
-          .stat-icon {
-            width: 48px;
-            height: 48px;
-          }
+          .content-wrapper { margin-left: 0; }
+          .dashboard-header { padding: 20px; }
+          .stat-icon { width: 48px; height: 48px; }
         }
-       `}</style>
+      `}</style>
     </div>
   );
 };
-export default DashboardScreen;
 
+export default DashboardScreen;

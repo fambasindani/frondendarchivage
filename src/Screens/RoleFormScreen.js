@@ -25,7 +25,7 @@ const RoleForm = () => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  
+
   // États pour la pagination
   const [pagination, setPagination] = useState({
     current_page: 1,
@@ -53,7 +53,7 @@ const RoleForm = () => {
         page: page,
         per_page: pagination.per_page
       };
-      
+
       if (search) {
         params.search = search;
       }
@@ -64,7 +64,7 @@ const RoleForm = () => {
       });
 
       console.log("Réponse permissions:", response.data);
-      
+
       // Adapter selon la structure de votre API
       if (response.data?.success && response.data?.data) {
         setPermissions(response.data.data.data || []);
@@ -130,13 +130,13 @@ const RoleForm = () => {
    */
   useEffect(() => {
     if (!token) return;
-    
+
     const initializeData = async () => {
       setLoading(true);
       try {
         // Charger les permissions avec pagination
         await fetchPermissions(1, '');
-        
+
         // Charger le rôle si en mode édition
         if (id) {
           await fetchRole();
@@ -291,17 +291,17 @@ const RoleForm = () => {
   /** 🔹 Grouper les permissions par catégorie */
   const groupPermissionsByCategory = () => {
     const grouped = {};
-    
+
     permissions.forEach(perm => {
       if (!perm?.code) return;
-      
+
       const category = perm.code.split('_')[0] || 'Autres';
       if (!grouped[category]) {
         grouped[category] = [];
       }
       grouped[category].push(perm);
     });
-    
+
     return grouped;
   };
 
@@ -344,12 +344,16 @@ const RoleForm = () => {
         <div className="col-lg-8">
           <div className="card shadow-sm border-0">
             <div className="card-body">
-              <form onSubmit={handleSubmit}>
-                <div className="mb-4">
-                  <h5 className="card-title mb-3">Informations du rôle</h5>
 
-                  <div className="form-group">
-                    <label className="font-weight-bold">
+              <form onSubmit={handleSubmit}>
+
+                <div className="mb-4">
+                  <h5 className="card-title mb-3" style={{ display: 'block', width: '100%' }}>
+                    Informations du rôle
+                  </h5>
+
+                  <div className="form-group" style={{ display: 'block', width: '100%', clear: 'both' }}>
+                    <label className="font-weight-bold" style={{ display: 'block', width: '100%', marginBottom: '0.5rem' }}>
                       Nom du rôle <span className="text-danger">*</span>
                     </label>
 
@@ -359,23 +363,24 @@ const RoleForm = () => {
                       value={formData.nom}
                       onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
                       disabled={submitting || id === '1'}
-                      required
+                      style={{ display: 'block', width: '100%' }}
                     />
 
                     {renderFieldError('nom')}
                   </div>
 
-                  <div className="form-group">
-                    <label className="font-weight-bold">Description</label>
+                  <div className="form-group" style={{ display: 'block', width: '100%', clear: 'both' }}>
+                    <label className="font-weight-bold" style={{ display: 'block', width: '100%', marginBottom: '0.5rem' }}>
+                      Description
+                    </label>
 
                     <textarea
                       className={`form-control ${errors.description ? 'is-invalid' : ''}`}
                       rows="3"
                       value={formData.description}
-                      onChange={(e) =>
-                        setFormData({ ...formData, description: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       disabled={submitting}
+                      style={{ display: 'block', width: '100%' }}
                     />
 
                     {renderFieldError('description')}
@@ -480,7 +485,7 @@ const RoleForm = () => {
                         <ul className="pagination mb-0">
                           <li className={`page-item ${pagination.current_page === 1 ? 'disabled' : ''}`}>
                             <button
-                            type="button" 
+                              type="button"
                               className="page-link"
                               onClick={() => handlePageChange(pagination.current_page - 1)}
                               disabled={pagination.current_page === 1}
@@ -488,23 +493,23 @@ const RoleForm = () => {
                               <FaChevronLeft /> Précédent
                             </button>
                           </li>
-                          
+
                           {[...Array(pagination.last_page)].map((_, i) => {
                             const pageNum = i + 1;
                             // Afficher max 5 pages autour de la page courante
                             if (
                               pageNum === 1 ||
                               pageNum === pagination.last_page ||
-                              (pageNum >= pagination.current_page - 2 && 
-                               pageNum <= pagination.current_page + 2)
+                              (pageNum >= pagination.current_page - 2 &&
+                                pageNum <= pagination.current_page + 2)
                             ) {
                               return (
                                 <li
                                   key={pageNum}
                                   className={`page-item ${pagination.current_page === pageNum ? 'active' : ''}`}
                                 >
-                                  <button 
-                                  type="button" 
+                                  <button
+                                    type="button"
                                     className="page-link"
                                     onClick={() => handlePageChange(pageNum)}
                                   >
@@ -524,10 +529,10 @@ const RoleForm = () => {
                             }
                             return null;
                           })}
-                          
+
                           <li className={`page-item ${pagination.current_page === pagination.last_page ? 'disabled' : ''}`}>
                             <button
-                            type="button" 
+                              type="button"
                               className="page-link"
                               onClick={() => handlePageChange(pagination.current_page + 1)}
                               disabled={pagination.current_page === pagination.last_page}

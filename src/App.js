@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom'; // 👈 AJOUTEZ Redirect ICI
 import { useEffect } from 'react';
 import { useHistory } from 'react-router-dom';
 import LoginScreen from './Screens/LoginScreen';
@@ -44,6 +44,8 @@ import DetailNoteScreen from './Screens/DetailNoteScreen';
 
 // Import du composant IdleTimer
 import IdleTimer from './Composant/Temps';
+// Import du composant ProtectedRoute
+import ProtectedRoute from './Composant/ProtectedRoute';
 
 function AppContent() {
   const history = useHistory();
@@ -65,96 +67,97 @@ function AppContent() {
       )}
       
       <Switch>
-        {/* Accueil par défaut → Login */}
-        <Route path="/scan" component={ScanViewers} />
+        {/* Routes publiques */}
         <Route exact path="/" component={LoginScreen} />
+        <Route path="/scan" component={ScanViewers} />
 
-        {/* <Route exact path="/" component={HomeScreen} /> */}
+        {/* Routes protégées */}
+        <ProtectedRoute path="/direction" component={DirectionScreen} />
+        <ProtectedRoute path="/classeur" component={ClasseurScreen} />
+        <ProtectedRoute path="/centre-ordonnancement" component={CentreScreen} />
+        <ProtectedRoute path="/emplacement" component={EmplacementScreen} />
+        <ProtectedRoute path="/document" component={DocumentScreen} />
+        <ProtectedRoute path="/ministere" component={MinistereScreen} />
+        <ProtectedRoute path="/tableaudebord" component={Tableaudebord} />
+        <ProtectedRoute path="/note-perception" component={NoteperceptionScreen} />
+        <ProtectedRoute path="/note-plus" component={NotePlusScreen} />
+        <ProtectedRoute path="/scan" component={ScannerComponent} />
+        <ProtectedRoute path="/listedocument/:id" component={ListeDocumentScreen} />
+        <ProtectedRoute path="/utilisateur" component={UtilisateurScreen} />
+        <ProtectedRoute path="/tableaudebordnote" component={Tableaudebordnote} />
+        <ProtectedRoute path="/listenote/:id" component={ListenoteScreen} />
+        <ProtectedRoute path="/addform" component={FormDocumentScreen} />
+        <ProtectedRoute path="/note/form" component={FormNoteScreen} />
+        <ProtectedRoute path="/note/detail/:id" component={DetailNoteScreen} />
+        <ProtectedRoute path="/detail-document/:id" component={DetailScreen} />
+        <ProtectedRoute path="/profil" component={ProfilScreen} />
 
-        {/* Routes de ton application existante */}
-        <Route path="/direction" component={DirectionScreen} />
-        <Route path="/classeur" component={ClasseurScreen} />
-        <Route path="/centre-ordonnancement" component={CentreScreen} />
-        <Route path="/emplacement" component={EmplacementScreen} />
-        <Route path="/document" component={DocumentScreen} />
-        <Route path="/ministere" component={MinistereScreen} />
-        <Route path="/tableaudebord" component={Tableaudebord} />
-        <Route path="/note-perception" component={NoteperceptionScreen} />
-        <Route path="/note-plus" component={NotePlusScreen} />
-        <Route path="/scan" component={ScannerComponent} />
-        <Route path="/listedocument/:id" component={ListeDocumentScreen} />
-        <Route path="/utilisateur" component={UtilisateurScreen} />
-        <Route path="/tableaudebordnote" component={Tableaudebordnote} />
-        <Route path="/listenote/:id" component={ListenoteScreen} />
-        <Route path="/addform" component={FormDocumentScreen} />
-        <Route path="/note/form" component={FormNoteScreen} />
-        <Route path="/note/detail/:id" component={DetailNoteScreen} />
-        <Route path="/detail-document/:id" component={DetailScreen} />
-        <Route path="/profil" component={ProfilScreen} />
-
-        {/* Routes de gestion des utilisateurs */}
-        <Route path="/gestion-utilisateurs">
+        {/* Routes de gestion des utilisateurs (protégées) */}
+        <ProtectedRoute path="/gestion-utilisateurs">
           <UserManagementLayout>
             <Switch>
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/dashboard"
-                render={(props) => <Dashboard {...props} />}
+                component={Dashboard}
               />
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/utilisateurs"
-                render={(props) => <Users {...props} />}
+                component={Users}
               />
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/roles/nouveau"
-                render={(props) => <RoleCreateScreen {...props} />}
+                component={RoleCreateScreen}
               />
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/roles/:id/modifier"
-                render={(props) => <RoleForm {...props} />}
+                component={RoleForm}
               />
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/roles/:id"
-                render={(props) => <RoleDetailScreen {...props} />}
+                component={RoleDetailScreen}
               />
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/roles"
-                render={(props) => <Roles {...props} />}
+                component={Roles}
               />
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/permissions"
-                render={(props) => <Permissions {...props} />}
+                component={Permissions}
               />
-
-              {/* Directions */}
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/directions/nouvelle"
-                render={(props) => <DirectionCreateScreen {...props} />}
+                component={DirectionCreateScreen}
               />
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/directions/:id/modifier"
-                render={(props) => <DirectionEditScreen {...props} />}
+                component={DirectionEditScreen}
               />
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/directions/:id"
-                render={(props) => <DirectionDetailScreen {...props} />}
+                component={DirectionDetailScreen}
               />
-              <Route
+              <ProtectedRoute
                 exact
                 path="/gestion-utilisateurs/directions"
-                render={(props) => <Directions {...props} />}
+                component={Directions}
               />
             </Switch>
           </UserManagementLayout>
+        </ProtectedRoute>
+
+        {/* Route 404 - Redirection vers login */}
+        <Route path="*">
+          <Redirect to="/" />
         </Route>
       </Switch>
     </>

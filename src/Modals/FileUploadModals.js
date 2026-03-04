@@ -1,10 +1,7 @@
-// src/Composant/FileUploadModal.js
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Swal from "sweetalert2";
 import axios from "axios";
 import scannerService from "../Composant/ScannerService ";
-import ocrService from "../Composant/ocrService";
-import OCRTextModal from "./OCRTextModal";
 import {
     FaFilePdf,
     FaTrash,
@@ -19,9 +16,7 @@ import {
     FaBell,
     FaCheckCircle,
     FaExclamationTriangle,
-    FaStopCircle,
-    FaMicroscope,
-    FaFileAlt
+    FaStopCircle
 } from 'react-icons/fa';
 import { API_BASE_URL } from "../config";
 
@@ -39,13 +34,7 @@ const FileUploadModal = ({
     const [showScannerConfig, setShowScannerConfig] = useState(false);
     const [scanInProgress, setScanInProgress] = useState(false);
     const [lastScanTime, setLastScanTime] = useState(null);
-    
-    // 🔹 ÉTATS POUR L'OCR
-    const [ocrInProgress, setOcrInProgress] = useState(false);
-    const [ocrResults, setOcrResults] = useState({});
-    const [ocrProgress, setOcrProgress] = useState({ current: 0, total: 0, file: '', message: '' });
-    const [selectedOCRText, setSelectedOCRText] = useState(null);
-    const [showOCRModal, setShowOCRModal] = useState(false);
+    const [scanTimeoutId, setScanTimeoutId] = useState(null);
     
     const scannerConfig = {
         apiUrl: API_BASE_URL,
@@ -60,11 +49,6 @@ const FileUploadModal = ({
     const lastFileCountRef = useRef(0);
     const scanStartTimeRef = useRef(null);
     const scanSafetyTimeoutRef = useRef(null);
-    
-    // 🔹 Set pour suivre les fichiers déjà traités
-    const processedFilesRef = useRef(new Set());
-    // 🔹 Flag pour éviter les appels concurrents
-    const isProcessingOCRRef = useRef(false);
 
     // 🔹 DEBUG: Vérifier les props reçues
     useEffect(() => {
@@ -81,6 +65,7 @@ const FileUploadModal = ({
             startPolling();
         }
 
+        // Nettoyage à la fermeture
         return () => {
             stopPolling();
             clearAllTimeouts();
@@ -95,12 +80,14 @@ const FileUploadModal = ({
         }
     };
 
-    // 🔹 Démarrer le polling
+    // 🔹 Démarrer le polling pour vérifier les nouveaux fichiers
     const startPolling = () => {
-        stopPolling();
+        stopPolling(); // S'assurer qu'il n'y a pas de doublon
+        
         pollingIntervalRef.current = setInterval(() => {
             fetchExistingFiles();
-        }, 3000);
+        }, 3000); // Vérifier toutes les 3 secondes
+        
         console.log("🔁 Polling démarré");
     };
 
@@ -113,16 +100,9 @@ const FileUploadModal = ({
         }
     };
 
-    // 🔹 Charger les fichiers existants (VERSION CORRIGÉE)
+    // 🔹 Charger les fichiers existants depuis l'API
     const fetchExistingFiles = async () => {
-        // Éviter de lancer plusieurs traitements en même temps
-        if (isProcessingOCRRef.current) {
-            console.log("⏳ OCR déjà en cours, polling ignoré");
-            return;
-        }
-
         try {
-            console.log("📡 Fetching existing files...");
             const res = await axios.get(
                 `${API_BASE_URL}/documents/${documentId}`,
                 { 
@@ -140,187 +120,78 @@ const FileUploadModal = ({
                     url: `${API_BASE_URL}/documents-declaration/download/${f.id}`,
                     created_at: f.created_at || f.upload_date || new Date().toISOString(),
                     size: f.taille || f.size || 0,
-                    type: f.type || 'application/pdf',
-                    hasOcr: !!f.montext
+                    type: f.type || 'application/pdf'
                 }));
 
+                // Trier par date de création (plus récent en premier)
                 newFiles.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+                // Vérifier si des nouveaux fichiers sont arrivés
                 const currentCount = uploadedFiles.length;
                 const newCount = newFiles.length;
                 
-                console.log(`📊 Fichiers: avant ${currentCount}, maintenant ${newCount}`);
-                
                 if (newCount > currentCount) {
                     const addedFiles = newFiles.slice(0, newCount - currentCount);
-                    console.log(`🎉 ${addedFiles.length} NOUVEAU(X) FICHIER(S) DÉTECTÉ(S) !`, addedFiles);
+                    console.log(`🎉 ${addedFiles.length} nouveau(x) fichier(s) détecté(s) !`);
                     
-                    // Filtrer les fichiers non traités et sans OCR
-                    const filesToProcess = addedFiles.filter(f => {
-                        const alreadyProcessed = processedFilesRef.current.has(f.id) || f.hasOcr || ocrResults[f.id];
-                        console.log(`📄 ${f.nom} - ID: ${f.id}, Déjà traité: ${alreadyProcessed ? 'OUI' : 'NON'}, hasOcr: ${f.hasOcr ? 'OUI' : 'NON'}`);
-                        return !alreadyProcessed;
-                    });
-                    
-                    if (filesToProcess.length > 0) {
-                        console.log(`🚀 ${filesToProcess.length} fichier(s) à traiter par OCR:`, filesToProcess);
-                        
-                        // Marquer comme traités immédiatement pour éviter les doublons
-                        filesToProcess.forEach(f => processedFilesRef.current.add(f.id));
-                        
-                        // Mettre à jour la liste
-                        setUploadedFiles(newFiles);
-                        
-                        // LANCER L'OCR
-                        await processMultipleFilesWithOCR(filesToProcess);
-                    } else {
-                        console.log("✅ Tous les nouveaux fichiers ont déjà été traités");
-                        setUploadedFiles(newFiles);
+                    // Si un scan était en cours, le terminer
+                    if (scanInProgress) {
+                        completeScan(addedFiles.length);
                     }
-                } else {
-                    setUploadedFiles(newFiles);
                 }
-                
+
+                // Mettre à jour la liste des fichiers
+                setUploadedFiles(newFiles);
                 lastFileCountRef.current = newCount;
                 
+                // Marquer le chargement comme terminé
                 if (loadingExistingFiles) {
                     setLoadingExistingFiles(false);
                 }
             }
         } catch (err) {
             console.error("❌ Erreur chargement fichiers:", err);
+            
             if (loadingExistingFiles) {
                 setLoadingExistingFiles(false);
             }
         }
     };
 
-    // 🔹 Traiter un fichier avec OCR
-    const processFileWithOCR = async (file, fileId) => {
-        console.log("🚀 processFileWithOCR appelé avec:", { file, fileId });
+    // 🔹 Terminer un scan avec succès
+    const completeScan = (filesCount) => {
+        console.log(`✅ Scan terminé avec ${filesCount} fichier(s)`);
         
-        try {
-            // Vérifier que file est valide
-            if (!file || !file.url) {
-                console.error("❌ Fichier invalide:", file);
-                return false;
-            }
-
-            setOcrProgress(prev => ({
-                ...prev,
-                message: `Extraction du texte de ${file.nom}...`
-            }));
-
-            // Télécharger le fichier depuis l'URL
-            console.log(`⬇️ Téléchargement de ${file.nom}...`);
-            const response = await fetch(file.url);
-            
-            if (!response.ok) {
-                throw new Error(`Erreur téléchargement: ${response.status}`);
-            }
-            
-            const blob = await response.blob();
-            const pdfFile = new File([blob], file.nom, { type: 'application/pdf' });
-            
-            console.log(`✅ Fichier téléchargé: ${pdfFile.size} octets`);
-
-            // Lancer l'OCR
-            console.log(`🔍 Lancement OCR sur ${file.nom}...`);
-            const result = await ocrService.extractTextFromPDF(pdfFile);
-            console.log("📊 Résultat OCR:", result);
-
-            if (result.success && result.text) {
-                console.log(`📝 Texte extrait: ${result.text.length} caractères`);
-                
-                // Sauvegarder le texte OCR dans la base de données
-                console.log("📤 Envoi au backend...");
-                const saveResponse = await axios.put(
-                    `${API_BASE_URL}/documents-declaration/${fileId}/update-text`,
-                    { montext: result.text },
-                    { headers: { 'Authorization': `Bearer ${token}` } }
-                );
-
-                console.log("📥 Réponse backend:", saveResponse.data);
-
-                if (saveResponse.data.success) {
-                    console.log("✅ Sauvegarde réussie!");
-                    
-                    setOcrResults(prev => ({
-                        ...prev,
-                        [fileId]: {
-                            text: result.text,
-                            pages: result.pages,
-                            date: new Date().toISOString()
-                        }
-                    }));
-
-                    // Mettre à jour le fichier dans la liste
-                    setUploadedFiles(prev => prev.map(f => 
-                        f.id === fileId ? { ...f, hasOcr: true } : f
-                    ));
-
-                    return true;
-                } else {
-                    console.error("❌ Erreur sauvegarde:", saveResponse);
-                    return false;
-                }
-            } else {
-                console.error("❌ Échec OCR:", result.error);
-                return false;
-            }
-        } catch (error) {
-            console.error('❌ Erreur processFileWithOCR:', error);
-            return false;
+        setScanInProgress(false);
+        setLastScanTime(new Date());
+        
+        // Fermer la notification de scan si elle existe
+        if (scanSwalRef.current) {
+            scanSwalRef.current.close();
+            scanSwalRef.current = null;
         }
+        
+        // Nettoyer le timeout de sécurité
+        clearAllTimeouts();
+        
+        // Revenir au polling normal
+        stopPolling();
+        startPolling();
+        
+        // Afficher une notification de succès (optionnel, on peut laisser)
+        Swal.fire({
+            icon: 'success',
+            title: 'Scan terminé !',
+            text: `${filesCount} fichier(s) ajouté(s) avec succès`,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 4000,
+            timerProgressBar: true
+        });
     };
 
-    // 🔹 Traiter plusieurs fichiers avec OCR
-    const processMultipleFilesWithOCR = async (files) => {
-        console.log("🚀 processMultipleFilesWithOCR appelé avec", files.length, "fichiers");
-        
-        if (!files || files.length === 0) {
-            console.log("⚠️ Aucun fichier à traiter");
-            return 0;
-        }
-
-        // Marquer que l'OCR est en cours
-        isProcessingOCRRef.current = true;
-        setOcrInProgress(true);
-        
-        let successCount = 0;
-        
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            
-            console.log(`📄 Traitement ${i + 1}/${files.length}:`, file.nom);
-            
-            setOcrProgress({
-                current: i + 1,
-                total: files.length,
-                file: file.nom,
-                message: `OCR ${i + 1}/${files.length} : ${file.nom}`
-            });
-
-            try {
-                const success = await processFileWithOCR(file, file.id);
-                if (success) successCount++;
-            } catch (error) {
-                console.error(`❌ Erreur sur ${file.nom}:`, error);
-            }
-        }
-
-        setOcrInProgress(false);
-        setOcrProgress({ current: 0, total: 0, file: '', message: '' });
-        
-        // Marquer que l'OCR est terminé
-        isProcessingOCRRef.current = false;
-
-        console.log(`📊 Bilan OCR: ${successCount}/${files.length} succès`);
-        
-        return successCount;
-    };
-
-    // 🔹 Upload avec OCR OBLIGATOIRE
+    // 🔹 Fonction pour uploader plusieurs fichiers
     const uploadMultipleFiles = async (files) => {
         if (!files.length || !documentId) return;
         
@@ -349,60 +220,48 @@ const FileUploadModal = ({
                     <div class="text-center">
                         <div class="spinner-border text-primary mb-2"></div>
                         <p class="mb-1">Upload de <strong>${pdfFiles.length} fichier(s)</strong></p>
+                        <div class="small text-muted text-left mt-2">
+                            ${pdfFiles.slice(0, 3).map(f => `<div>• ${f.name}</div>`).join('')}
+                            ${pdfFiles.length > 3 ? `<div>... et ${pdfFiles.length - 3} autres</div>` : ''}
+                        </div>
                     </div>
                 `,
                 allowOutsideClick: false,
-                showConfirmButton: false
+                showConfirmButton: false,
+                showCloseButton: false
             });
 
             const response = await axios.post(
                 `${API_BASE_URL}/documents-declaration/upload-multiple`,
                 formData,
-                { headers: { 'Authorization': `Bearer ${token}` } }
+                { 
+                    headers: { 
+                        'Authorization': `Bearer ${token}`
+                    }
+                }
             );
 
             await swalInstance.close();
 
             if (response.data.success || response.data.documents) {
-                const uploadedDocuments = response.data.documents || [];
+                const uploadedDocuments = response.data.documents || response.data.files || [];
                 
                 const newFiles = uploadedDocuments.map((doc, index) => ({
                     id: doc.id,
-                    nom: doc.nom_native || pdfFiles[index]?.name || 'Sans nom',
+                    nom: doc.nom_native || doc.nom || pdfFiles[index]?.name || 'Sans nom',
                     url: `${API_BASE_URL}/documents-declaration/download/${doc.id}`,
                     created_at: doc.created_at || new Date().toISOString(),
-                    size: doc.taille || pdfFiles[index]?.size || 0,
-                    type: 'application/pdf',
-                    hasOcr: false
+                    size: doc.size || pdfFiles[index]?.size || 0,
+                    type: doc.type || 'application/pdf'
                 }));
 
-                // Marquer comme traités immédiatement
-                newFiles.forEach(f => processedFilesRef.current.add(f.id));
-
+                // Ajouter les nouveaux fichiers au début de la liste
                 setUploadedFiles(prev => [...newFiles, ...prev]);
-
-                // LANCER OCR OBLIGATOIRE
-                Swal.fire({
-                    title: 'Extraction du texte en cours...',
-                    html: `
-                        <div class="text-center">
-                            <div class="spinner-border text-primary mb-2"></div>
-                            <p>Analyse OCR de ${newFiles.length} fichier(s)...</p>
-                            <p class="small text-muted">Cette opération peut prendre quelques instants</p>
-                        </div>
-                    `,
-                    allowOutsideClick: false,
-                    showConfirmButton: false
-                });
-
-                const successCount = await processMultipleFilesWithOCR(newFiles);
-
-                Swal.close();
-
+                
                 Swal.fire({
                     icon: 'success',
-                    title: 'Upload et OCR terminés !',
-                    text: `${uploadedDocuments.length} fichier(s) uploadé(s) - ${successCount} analysé(s) avec succès`,
+                    title: 'Succès!',
+                    text: `${uploadedDocuments.length} fichier(s) uploadé(s) avec succès`,
                     timer: 2000,
                     showConfirmButton: false
                 });
@@ -410,53 +269,23 @@ const FileUploadModal = ({
 
         } catch (err) {
             console.error("Erreur upload multiple:", err);
+            
+            let errorMessage = 'Échec lors de l\'upload des fichiers';
+            if (err.response?.data?.message) {
+                errorMessage = err.response.data.message;
+            }
+            
             Swal.fire({
                 icon: 'error',
                 title: 'Erreur',
-                text: err.response?.data?.message || 'Échec lors de l\'upload'
+                text: errorMessage,
             });
         } finally {
             setUploading(false);
         }
     };
 
-    // 🔹 Voir le texte OCR
-    const handleViewOCRText = (file) => {
-        const ocrResult = ocrResults[file.id];
-        if (ocrResult) {
-            setSelectedOCRText({
-                nom: file.nom,
-                text: ocrResult.text,
-                pages: ocrResult.pages
-            });
-            setShowOCRModal(true);
-        } else {
-            Swal.fire({
-                icon: 'info',
-                title: 'OCR non disponible',
-                text: 'Le texte n\'a pas encore été extrait pour ce fichier'
-            });
-        }
-    };
-
-    // 🔹 Terminer un scan
-    const completeScan = async (filesCount) => {
-        console.log(`✅ Scan terminé avec ${filesCount} fichier(s)`);
-        
-        setScanInProgress(false);
-        setLastScanTime(new Date());
-        
-        if (scanSwalRef.current) {
-            scanSwalRef.current.close();
-            scanSwalRef.current = null;
-        }
-        
-        clearAllTimeouts();
-        stopPolling();
-        startPolling();
-    };
-
-    // 🔹 Annuler un scan
+    // 🔹 Annuler un scan en cours
     const cancelScan = () => {
         Swal.fire({
             title: 'Annuler le scan ?',
@@ -471,13 +300,17 @@ const FileUploadModal = ({
         }).then((result) => {
             if (result.isConfirmed) {
                 setScanInProgress(false);
+                
+                // Nettoyer le timeout de sécurité
                 clearAllTimeouts();
                 
+                // Fermer la notification de scan
                 if (scanSwalRef.current) {
                     scanSwalRef.current.close();
                     scanSwalRef.current = null;
                 }
                 
+                // Revenir au polling normal
                 stopPolling();
                 startPolling();
                 
@@ -492,8 +325,9 @@ const FileUploadModal = ({
         });
     };
 
-    // 🔹 Démarrer le scan
+    // 🔹 Démarrer le scan avec le scanner Windows
     const handleStartScan = async () => {
+        // Vérifier d'abord la connexion
         const connectionResult = await scannerService.testConnectionWithInstructions();
         
         if (!connectionResult.connected) {
@@ -516,6 +350,7 @@ const FileUploadModal = ({
             return;
         }
 
+        // Vérifier les informations requises
         if (!scannerConfig.token || !scannerConfig.idDeclaration || !scannerConfig.idClasseur) {
             Swal.fire({
                 icon: 'error',
@@ -525,6 +360,7 @@ const FileUploadModal = ({
             return;
         }
 
+        // Configurer le scanner
         const configSwal = Swal.fire({
             title: 'Configuration du scanner...',
             text: 'Envoi des paramètres au scanner',
@@ -534,6 +370,7 @@ const FileUploadModal = ({
         });
 
         try {
+            // 1. Envoyer l'URL de l'API
             const urlResult = await scannerService.setApiUrl(scannerConfig.apiUrl);
             if (!urlResult.success) {
                 await configSwal.close();
@@ -545,6 +382,7 @@ const FileUploadModal = ({
                 return;
             }
 
+            // 2. Envoyer les infos du document
             const infoResult = await scannerService.setDocumentInfo(
                 scannerConfig.idDeclaration,
                 scannerConfig.idClasseur,
@@ -564,6 +402,7 @@ const FileUploadModal = ({
 
             await configSwal.close();
 
+            // 3. Demander confirmation
             const confirmResult = await Swal.fire({
                 icon: 'question',
                 title: 'Démarrer le scan ?',
@@ -576,7 +415,7 @@ const FileUploadModal = ({
                                 <strong>⚠️ IMPORTANT :</strong><br>
                                 • Laissez cette fenêtre ouverte<br>
                                 • Les fichiers apparaîtront automatiquement<br>
-                                • L'OCR sera lancé automatiquement
+                                • Pas besoin d'actualiser
                             </small>
                         </div>
                     </div>
@@ -589,19 +428,23 @@ const FileUploadModal = ({
             });
 
             if (confirmResult.isConfirmed) {
+                // 4. Démarrer le scan
                 setScanInProgress(true);
                 scanStartTimeRef.current = new Date();
                 
+                // Timeout de sécurité (3 minutes)
                 scanSafetyTimeoutRef.current = setTimeout(() => {
                     if (scanInProgress) {
                         console.log("⚠️ Timeout de sécurité atteint");
                         setScanInProgress(false);
                         
+                        // Fermer la notification de scan
                         if (scanSwalRef.current) {
                             scanSwalRef.current.close();
                             scanSwalRef.current = null;
                         }
                         
+                        // Revenir au polling normal
                         stopPolling();
                         startPolling();
                         
@@ -612,16 +455,18 @@ const FileUploadModal = ({
                             timer: 4000
                         });
                     }
-                }, 180000);
+                }, 180000); // 3 minutes
 
+                // Augmenter la fréquence de vérification pendant le scan
                 stopPolling();
                 pollingIntervalRef.current = setInterval(() => {
                     fetchExistingFiles();
-                }, 1500);
+                }, 1500); // Vérifier toutes les 1.5 secondes pendant le scan
 
                 const scanResult = await scannerService.startScan();
                 
                 if (scanResult.success) {
+                    // Afficher la notification de scan
                     scanSwalRef.current = Swal.fire({
                         icon: 'info',
                         title: 'Scan démarré',
@@ -630,18 +475,23 @@ const FileUploadModal = ({
                                 <div class="spinner-border text-primary mb-3"></div>
                                 <p><strong>L'application scanner est ouverte.</strong></p>
                                 <p class="text-muted small">Les fichiers apparaîtront automatiquement ici.</p>
-                                <p class="text-info small">L'OCR sera lancé automatiquement</p>
+                                <div class="mt-3">
+                                    <button class="btn btn-sm btn-outline-danger" onclick="window.cancelCurrentScan()">
+                                        <FaStopCircle class="mr-1" /> Annuler le scan
+                                    </button>
+                                </div>
                             </div>
                         `,
                         showConfirmButton: false,
                         allowOutsideClick: false,
-                        timer: 15000,
+                        timer: 15000, // Fermer après 15 secondes
                         timerProgressBar: true,
                         willClose: () => {
                             scanSwalRef.current = null;
                         }
                     });
                 } else {
+                    // En cas d'erreur
                     clearAllTimeouts();
                     setScanInProgress(false);
                     stopPolling();
@@ -727,16 +577,12 @@ const FileUploadModal = ({
             try {
                 await axios.delete(
                     `${API_BASE_URL}/delete-document/${fileId}`,
-                    { headers: { 'Authorization': `Bearer ${token}` } }
+                    { 
+                        headers: { 
+                            'Authorization': `Bearer ${token}` 
+                        } 
+                    }
                 );
-                
-                // Supprimer aussi le résultat OCR
-                const newOcrResults = { ...ocrResults };
-                delete newOcrResults[fileId];
-                setOcrResults(newOcrResults);
-                
-                // Supprimer du set des fichiers traités
-                processedFilesRef.current.delete(fileId);
                 
                 setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
                 
@@ -749,10 +595,16 @@ const FileUploadModal = ({
                 });
             } catch (err) {
                 console.error("❌ Erreur suppression:", err);
+                
+                let errorMessage = 'Impossible de supprimer le fichier';
+                if (err.response?.data?.message) {
+                    errorMessage = err.response.data.message;
+                }
+                
                 Swal.fire({
                     icon: 'error',
                     title: 'Erreur',
-                    text: err.response?.data?.message || 'Impossible de supprimer le fichier'
+                    text: errorMessage,
                 });
             }
         }
@@ -854,11 +706,6 @@ const FileUploadModal = ({
                                                 <FaSpinner className="fa-spin mr-1" /> Scan en cours...
                                             </span>
                                         )}
-                                        {ocrInProgress && (
-                                            <span className="ml-2 badge badge-info">
-                                                <FaSpinner className="fa-spin mr-1" /> OCR en cours...
-                                            </span>
-                                        )}
                                     </small>
                                 </div>
                             </div>
@@ -866,8 +713,8 @@ const FileUploadModal = ({
                                 type="button" 
                                 className="close text-white" 
                                 onClick={onClose} 
-                                disabled={uploading || scanInProgress || ocrInProgress}
-                                style={{ opacity: (uploading || scanInProgress || ocrInProgress) ? 0.5 : 1 }}
+                                disabled={uploading || scanInProgress}
+                                style={{ opacity: (uploading || scanInProgress) ? 0.5 : 1 }}
                             >
                                 <span>&times;</span>
                             </button>
@@ -881,7 +728,7 @@ const FileUploadModal = ({
                                     <div className="flex-grow-1">
                                         <strong>Scan en cours...</strong>
                                         <small className="d-block text-muted">
-                                            Les fichiers scannés apparaîtront automatiquement
+                                            Les fichiers scannés apparaîtront automatiquement ici
                                         </small>
                                     </div>
                                     <button 
@@ -890,27 +737,6 @@ const FileUploadModal = ({
                                     >
                                         <FaStopCircle className="mr-1" /> Annuler
                                     </button>
-                                </div>
-                            )}
-
-                            {/* Indicateur OCR en cours */}
-                            {ocrInProgress && (
-                                <div className="alert alert-info d-flex align-items-center mb-3">
-                                    <FaSpinner className="fa-spin mr-2" />
-                                    <div className="flex-grow-1">
-                                        <strong>OCR en cours...</strong>
-                                        <small className="d-block text-muted">
-                                            {ocrProgress.message || `Traitement ${ocrProgress.current}/${ocrProgress.total}`}
-                                        </small>
-                                        {ocrProgress.total > 0 && (
-                                            <div className="progress mt-2" style={{ height: '5px' }}>
-                                                <div 
-                                                    className="progress-bar progress-bar-striped progress-bar-animated bg-info"
-                                                    style={{ width: `${(ocrProgress.current / ocrProgress.total) * 100}%` }}
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
                                 </div>
                             )}
 
@@ -925,8 +751,8 @@ const FileUploadModal = ({
                                         <button 
                                             className="btn btn-sm btn-outline-primary mr-2"
                                             onClick={fetchExistingFiles}
-                                            disabled={loadingExistingFiles || uploading || ocrInProgress}
-                                            title="Rafraîchir"
+                                            disabled={loadingExistingFiles || uploading}
+                                            title="Rafraîchir manuellement"
                                         >
                                             <FaSpinner className={loadingExistingFiles ? 'fa-spin mr-1' : ''} />
                                             Actualiser
@@ -934,7 +760,7 @@ const FileUploadModal = ({
                                         <button 
                                             className="btn btn-sm btn-outline-info"
                                             onClick={testScannerConnection}
-                                            title="Vérifier le scanner"
+                                            title="Vérifier la connexion au scanner"
                                         >
                                             Tester connexion
                                         </button>
@@ -951,11 +777,10 @@ const FileUploadModal = ({
                                         <table className="table table-hover">
                                             <thead className="thead-light">
                                                 <tr>
-                                                    <th style={{ width: '35%' }}>Nom du fichier</th>
+                                                    <th style={{ width: '40%' }}>Nom du fichier</th>
                                                     <th>Taille</th>
                                                     <th>Date d'ajout</th>
-                                                    <th>OCR</th>
-                                                    <th style={{ width: '25%' }}>Actions</th>
+                                                    <th style={{ width: '20%' }}>Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -964,7 +789,7 @@ const FileUploadModal = ({
                                                         <td>
                                                             <div className="d-flex align-items-center">
                                                                 <FaFilePdf className="text-danger mr-2" />
-                                                                <span className="font-weight-bold text-truncate" style={{ maxWidth: '250px' }}>
+                                                                <span className="font-weight-bold text-truncate" style={{ maxWidth: '300px' }}>
                                                                     {file.nom}
                                                                 </span>
                                                             </div>
@@ -980,29 +805,12 @@ const FileUploadModal = ({
                                                             </small>
                                                         </td>
                                                         <td>
-                                                            {ocrResults[file.id] ? (
-                                                                <span className="text-success" title={`${ocrResults[file.id].pages} pages`}>
-                                                                    <FaCheckCircle className="mr-1" />
-                                                                    {ocrResults[file.id].pages} p.
-                                                                </span>
-                                                            ) : file.hasOcr ? (
-                                                                <span className="text-success">
-                                                                    <FaCheckCircle className="mr-1" />
-                                                                    OK
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-muted">
-                                                                    <FaTimes size={12} />
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                        <td>
                                                             <div className="btn-group btn-group-sm">
                                                                 <button 
                                                                     className="btn btn-outline-info"
                                                                     onClick={() => window.open(file.url, '_blank')}
                                                                     title="Prévisualiser"
-                                                                    disabled={uploading || ocrInProgress}
+                                                                    disabled={uploading}
                                                                 >
                                                                     <FaEye />
                                                                 </button>
@@ -1010,25 +818,15 @@ const FileUploadModal = ({
                                                                     className="btn btn-outline-success"
                                                                     onClick={() => window.open(file.url, '_blank')}
                                                                     title="Télécharger"
-                                                                    disabled={uploading || ocrInProgress}
+                                                                    disabled={uploading}
                                                                 >
                                                                     <FaDownload />
                                                                 </button>
-                                                                {(ocrResults[file.id] || file.hasOcr) && (
-                                                                    <button 
-                                                                        className="btn btn-outline-primary"
-                                                                        onClick={() => handleViewOCRText(file)}
-                                                                        title="Voir le texte OCR"
-                                                                        disabled={uploading || ocrInProgress}
-                                                                    >
-                                                                        <FaFileAlt />
-                                                                    </button>
-                                                                )}
                                                                 <button 
                                                                     className="btn btn-outline-danger"
                                                                     onClick={() => handleRemoveFile(file.id)}
                                                                     title="Supprimer"
-                                                                    disabled={uploading || ocrInProgress}
+                                                                    disabled={uploading}
                                                                 >
                                                                     <FaTrash />
                                                                 </button>
@@ -1044,7 +842,7 @@ const FileUploadModal = ({
                                         <div className="d-flex align-items-center">
                                             <FaFilePdf className="mr-3" style={{ fontSize: '1.5rem' }} />
                                             <div>
-                                                <p className="mb-0">Aucun fichier PDF attaché</p>
+                                                <p className="mb-0">Aucun fichier PDF n'est attaché à ce document</p>
                                                 <small className="text-muted">
                                                     Utilisez le formulaire ci-dessous pour ajouter des fichiers
                                                     {scanInProgress && " (scan en cours...)"}
@@ -1089,7 +887,7 @@ const FileUploadModal = ({
                                     <h5 className="mb-2">
                                         {isDragging ? 'Lâchez les fichiers ici' : 'Glissez-déposez vos fichiers PDF'}
                                     </h5>
-                                    <p className="text-muted mb-3">Taille max: 50MB • PDF uniquement</p>
+                                    <p className="text-muted mb-3">Taille maximale: 50MB par fichier • Formats acceptés: PDF uniquement</p>
 
                                     <div className="d-flex justify-content-center flex-wrap">
                                         <label className={`btn btn-primary btn-lg mr-3 mb-2 ${uploading ? 'disabled' : ''}`}>
@@ -1114,7 +912,7 @@ const FileUploadModal = ({
                                                             e.target.value = '';
                                                         }} 
                                                         style={{ display: 'none' }} 
-                                                        disabled={uploading || scanInProgress || ocrInProgress}
+                                                        disabled={uploading || scanInProgress}
                                                     />
                                                 </>
                                             )}
@@ -1123,7 +921,7 @@ const FileUploadModal = ({
                                         <button 
                                             className="btn btn-warning btn-lg mb-2"
                                             onClick={handleStartScan}
-                                            disabled={uploading || scanInProgress || ocrInProgress}
+                                            disabled={uploading || scanInProgress}
                                         >
                                             {scanInProgress ? (
                                                 <>
@@ -1137,12 +935,21 @@ const FileUploadModal = ({
                                                 </>
                                             )}
                                         </button>
+
+                                        <button 
+                                            className="btn btn-outline-secondary btn-lg mb-2 ml-2"
+                                            onClick={() => setShowScannerConfig(!showScannerConfig)}
+                                            disabled={uploading || scanInProgress}
+                                        >
+                                            <FaCog className="mr-2" />
+                                            Configurer
+                                        </button>
                                     </div>
                                     
                                     <div className="mt-4">
                                         <small className="text-muted">
                                             <FaBell className="mr-1" />
-                                            <strong>Note :</strong> L'OCR est automatique et obligatoire
+                                            <strong>Surveillance active :</strong> Les fichiers scannés apparaîtront automatiquement
                                         </small>
                                     </div>
                                 </div>
@@ -1153,7 +960,7 @@ const FileUploadModal = ({
                             <button 
                                 className="btn btn-secondary"
                                 onClick={onClose}
-                                disabled={uploading || scanInProgress || ocrInProgress}
+                                disabled={uploading || scanInProgress}
                             >
                                 Fermer
                             </button>
@@ -1167,7 +974,7 @@ const FileUploadModal = ({
                                         timer: 1500
                                     }).then(() => onClose());
                                 }}
-                                disabled={uploading || scanInProgress || ocrInProgress}
+                                disabled={uploading || scanInProgress}
                             >
                                 Terminer
                             </button>
@@ -1175,13 +982,6 @@ const FileUploadModal = ({
                     </div>
                 </div>
             </div>
-
-            {/* MODAL OCR */}
-            <OCRTextModal
-                isOpen={showOCRModal}
-                onClose={() => setShowOCRModal(false)}
-                textData={selectedOCRText}
-            />
 
             <style jsx>{`
                 .modal-backdrop {
@@ -1210,13 +1010,13 @@ const FileUploadModal = ({
                     overflow-y: auto;
                 }
                 
-                .progress {
-                    border-radius: 10px;
-                    overflow: hidden;
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(-10px); }
+                    to { opacity: 1; transform: translateY(0); }
                 }
                 
-                .progress-bar {
-                    transition: width 0.3s ease;
+                .alert-success {
+                    animation: fadeIn 0.3s ease-out;
                 }
             `}</style>
         </>

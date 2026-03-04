@@ -8,6 +8,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import logo from '../Images/Logo.png';
+import archive from '../Images/archiv.png';
+import note from '../Images/note.png';
+
+
+
+
 import {
     FaArchive,
     FaFileInvoiceDollar,
@@ -170,7 +176,7 @@ const LoginScreen = () => {
 
         } catch (error) {
             console.error("Login error:", error);
-            
+
             if (error.response?.status === 401) {
                 setLoginError("Email ou mot de passe incorrect");
             } else {
@@ -204,21 +210,21 @@ const LoginScreen = () => {
                 {showModuleSelection && (
                     <div className="module-selection">
                         <h1 className="module-title">Bienvenue dans la plateforme d'Archivage</h1>
-                        
+
                         {/* Logo centré comme dans la maquette */}
-                        <div className="logo-center">
-                            <img src={logo} alt="DGRAD" className="center-logo" />
+                        <div className="logo-container">
+                            <img src={logo} alt="DGRAD" className="logo-image" />
                         </div>
 
                         <div className="blink">Sélectionnez un module pour continuer</div>
-                        
+
                         <div className="modules-grid">
                             {/* Module Archivage Ordinaire */}
-                            <div 
+                            <div
                                 className="module-card"
                                 onClick={() => handleModuleSelect("ad")}
                             >
-                                <img src={logo} alt="Archivage" className="module-card-icon" />
+                                <img src={archive} alt="Archivage" className="module-card-icon" />
                                 <h3>Archivage Ordinaire</h3>
                                 <p>Documents administratifs, correspondances, rapports</p>
                                 <button className="module-btn btn-blue">
@@ -227,11 +233,11 @@ const LoginScreen = () => {
                             </div>
 
                             {/* Module Note de Perception */}
-                            <div 
+                            <div
                                 className="module-card"
                                 onClick={() => handleModuleSelect("np")}
                             >
-                                <img src={logo} alt="Perception" className="module-card-icon" />
+                                <img src={note} alt="Perception" className="module-card-icon" />
                                 <h3>Note de Perception</h3>
                                 <p>Documents financiers, quittances, pièces comptables</p>
                                 <button className="module-btn btn-green">
@@ -245,7 +251,7 @@ const LoginScreen = () => {
                 {/* Formulaire de connexion */}
                 {!showModuleSelection && selectedModule && (
                     <div className="login-form-wrapper">
-                        <button 
+                        <button
                             className="back-button"
                             onClick={handleBackToModules}
                         >
